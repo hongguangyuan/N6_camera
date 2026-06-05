@@ -1,0 +1,60 @@
+{
+    "version": 4,
+    "configurations": [
+        {
+            "name": "FSBL",
+            "includePath": [
+                "${workspaceFolder}/FSBL/Core/Inc",
+                "${workspaceFolder}/Drivers/STM32N6xx_HAL_Driver/Inc",
+                "${workspaceFolder}/Drivers/STM32N6xx_HAL_Driver/Inc/Legacy",
+                "${workspaceFolder}/Drivers/CMSIS/Include",
+                "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32N6xx/Include",
+                "${workspaceFolder}/Middlewares/ST/STM32_ExtMem_Manager",
+                "${workspaceFolder}/Middlewares/ST/STM32_ExtMem_Manager/boot",
+                "${workspaceFolder}/Middlewares/ST/STM32_ExtMem_Manager/nor_sfdp",
+                "${workspaceFolder}/Middlewares/ST/STM32_ExtMem_Manager/sal"
+            ],
+            "defines": [
+                "USE_HAL_DRIVER",
+                "STM32N657xx"
+            ],
+            "compilerPath": "D:/arm/bin/arm-none-eabi-gcc.exe",
+            "compilerArgs": [
+                "-mcpu=cortex-m55",
+                "-mthumb",
+                "-mfpu=fpv5-d16",
+                "-mfloat-abi=hard",
+                "-mcmse"
+            ],
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-gcc-arm"
+        },
+        {
+            "name": "Appli",
+            "includePath": [
+                "${workspaceFolder}/Appli/Core/Inc",
+                "${workspaceFolder}/Secure_nsclib",
+                "${workspaceFolder}/Drivers/STM32N6xx_HAL_Driver/Inc",
+                "${workspaceFolder}/Drivers/STM32N6xx_HAL_Driver/Inc/Legacy",
+                "${workspaceFolder}/Drivers/CMSIS/Include",
+                "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32N6xx/Include"
+            ],
+            "defines": [
+                "USE_HAL_DRIVER",
+                "STM32N657xx"
+            ],
+            "compilerPath": "D:/arm/bin/arm-none-eabi-gcc.exe",
+            "compilerArgs": [
+                "-mcpu=cortex-m55",
+                "-mthumb",
+                "-mfpu=fpv5-d16",
+                "-mfloat-abi=hard",
+                "-mcmse"
+            ],
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-gcc-arm"
+        }
+    ]
+}
