@@ -78,6 +78,8 @@ void Error_Handler(void);
 #define AD_IRQ_Pin GPIO_PIN_8
 #define AD_IRQ_GPIO_Port GPIOE
 #define AD_IRQ_EXTI_IRQn EXTI8_IRQn
+#define EN_MODULE_Pin GPIO_PIN_2
+#define EN_MODULE_GPIO_Port GPIOD
 #define AD_CS_Pin GPIO_PIN_0
 #define AD_CS_GPIO_Port GPIOB
 #define LED_Pin GPIO_PIN_1

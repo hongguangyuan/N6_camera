@@ -167,7 +167,7 @@
                 "-c",
                 "port=SWD",
                 "mode=HOTPLUG",
-                "freq=3300",
+                "freq=400",
                 "-el",
                 "${config:stm32.externalLoader}",
                 "-w",

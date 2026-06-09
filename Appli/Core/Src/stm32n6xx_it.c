@@ -56,6 +56,7 @@
 
 /* External variables --------------------------------------------------------*/
 /* USER CODE BEGIN EV */
+extern DCMIPP_HandleTypeDef hdcmipp;
 
 /* USER CODE END EV */
 
@@ -213,5 +214,14 @@ void SysTick_Handler(void)
 /******************************************************************************/
 
 /* USER CODE BEGIN 1 */
+void CSI_IRQHandler(void)
+{
+  HAL_DCMIPP_CSI_IRQHandler(&hdcmipp);
+}
+
+void DCMIPP_IRQHandler(void)
+{
+  HAL_DCMIPP_IRQHandler(&hdcmipp);
+}
 
 /* USER CODE END 1 */

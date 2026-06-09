@@ -38,18 +38,26 @@ BUILD_DIR = build
 C_SOURCES =  \
 ../../Appli/Core/Src/main.c \
 ../../Appli/Core/Src/gpio.c \
+../../Appli/Core/Src/camera_debug.c \
+../../Appli/Core/Src/csi.c \
+../../Appli/Core/Src/i2c.c \
 ../../Appli/Core/Src/usart.c \
 ../../Appli/Core/Src/stm32n6xx_it.c \
 ../../Appli/Core/Src/stm32n6xx_hal_msp.c \
 ../../Appli/Core/Src/secure_nsc.c \
+../../Drivers/BSP/Components/imx219/imx219.c \
 ../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_cortex.c \
+../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_dcmipp.c \
 ../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_rcc.c \
 ../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_rcc_ex.c \
 ../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_gpio.c \
 ../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_pwr.c \
 ../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_pwr_ex.c \
+../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_ramcfg.c \
 ../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal.c \
 ../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_exti.c \
+../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_i2c.c \
+../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_i2c_ex.c \
 ../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_rif.c \
 ../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_uart.c \
 ../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_uart_ex.c \
@@ -118,6 +126,7 @@ AS_INCLUDES =
 C_INCLUDES =  \
 -I../../Appli/Core/Inc \
 -I../../Secure_nsclib \
+-I../../Drivers/BSP/Components/imx219 \
 -I../../Drivers/STM32N6xx_HAL_Driver/Inc \
 -I../../Drivers/CMSIS/Device/ST/STM32N6xx/Include \
 -I../../Drivers/STM32N6xx_HAL_Driver/Inc/Legacy \
