@@ -60,8 +60,9 @@ try {
   }
 }
 finally {
-  if (Get-Process -Id $p.Id -ErrorAction SilentlyContinue) {
-    Stop-Process -Id $p.Id -Force
+  $openOcdProcess = Get-Process -Id $p.Id -ErrorAction SilentlyContinue
+  if ($openOcdProcess) {
+    Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
   }
 }
 
