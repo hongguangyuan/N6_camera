@@ -259,7 +259,7 @@ static uint32_t DCMIPP_RunPhyBitrateScan(void);
 static uint32_t DCMIPP_WaitForFrameComplete(uint32_t TimeoutMs);
 static uint32_t DCMIPP_WaitForPipeIdle(uint32_t TimeoutMs);
 static void DCMIPP_FreezeCaptureForDump(void);
-static void DCMIPP_LogPipe0Registers(const char *Tag);
+static void DCMIPP_LogPipeRegisters(const char *Tag);
 static void DCMIPP_SampleCsiFlags(void);
 static void DCMIPP_ClearCsiFlags(void);
 static uint32_t DCMIPP_WaitForDphyStopState(uint32_t TimeoutMs);
@@ -488,7 +488,7 @@ void CameraDebug_InitAndStart(I2C_HandleTypeDef *hi2c)
   return;
 #endif
 
-  DCMIPP_LogPipe0Registers("before_arm");
+  DCMIPP_LogPipeRegisters("before_arm");
 
   dcmipp_status = 2U;
   printf("[DCMIPP:%lu] arm PIPE%lu before sensor stream\r\n",
@@ -498,7 +498,7 @@ void CameraDebug_InitAndStart(I2C_HandleTypeDef *hi2c)
   printf("DCMIPP buffer prefill: fill=0x%02lX buf_changed=%lu buf_w0=0x%08lX\r\n",
          (uint32_t)DCMIPP_VERIFY_BUFFER_FILL, dcmipp_buf_changed, dcmipp_buf_w0);
   DCMIPP_StartCapture();
-  DCMIPP_LogPipe0Registers("after_arm");
+  DCMIPP_LogPipeRegisters("after_arm");
   dcmipp_status = 3U;
   dcmipp_capture_frozen = 0U;
   printf("DCMIPP capture armed: buffer=0x%08lX size=%lu bytes\r\n",
@@ -548,15 +548,15 @@ void CameraDebug_InitAndStart(I2C_HandleTypeDef *hi2c)
            dcmipp_p0_dccntr,
            (uint32_t)DCMIPP_VERIFY_FRAME_BYTES,
            HAL_GetTick());
-    DCMIPP_LogPipe0Registers("frame_timeout_keep_streaming");
+    DCMIPP_LogPipeRegisters("frame_timeout_keep_streaming");
 #if (DCMIPP_VERIFY_PHY_SCAN != 0U)
     (void)DCMIPP_RunPhyBitrateScan();
 #endif
     return;
   }
-  DCMIPP_LogPipe0Registers("frame_done_before_freeze");
+  DCMIPP_LogPipeRegisters("frame_done_before_freeze");
   DCMIPP_FreezeCaptureForDump();
-  DCMIPP_LogPipe0Registers("frozen_for_dump");
+  DCMIPP_LogPipeRegisters("frozen_for_dump");
   imx219_status = 7U;
   printf("CSI IMX219 bring-up PASS\r\n");
 
@@ -653,7 +653,7 @@ if ((dcmipp_rgb565_layout_dumped == 0U) && (dcmipp_frame_count > 0U))
   dcmipp_rgb565_layout_dumped = 1U;
 }
 #endif
-printf("heartbeat=%lu imx219=%lu stream=%s frozen=%lu done_tick=%lu freeze_tick=%lu dcmipp=%lu pipe=%lu frames=%lu hw=%lu dump=%lu/%lu buf_changed=%lu rgb565=%lu r5=0x%02lX..0x%02lX g6=0x%02lX..0x%02lX b5=0x%02lX..0x%02lX s=%04lX,%04lX,%04lX,%04lX vsync=%lu sof=%lu eof=%lu err=0x%08lX csi_err1=0x%08lX csi_err2=0x%08lX p0sr=0x%08lX p1sr=0x%08lX sr0=0x%08lX sr1=0x%08lX\r\n",
+printf("heartbeat=%lu imx219=%lu stream=%s frozen=%lu done_tick=%lu freeze_tick=%lu dcmipp=%lu pipe=%lu frames=%lu hw=%lu dump=%lu/%lu buf_changed=%lu rgb565=%lu r5=0x%02lX..0x%02lX g6=0x%02lX..0x%02lX b5=0x%02lX..0x%02lX s=%04lX,%04lX,%04lX,%04lX vsync=%lu sof=%lu eof=%lu err=0x%08lX p1_ovr=%lu post_frame_ovr=%lu csi_err1=0x%08lX csi_err2=0x%08lX p0sr=0x%08lX p1sr=0x%08lX sr0=0x%08lX sr1=0x%08lX\r\n",
        heartbeat++, imx219_status,
        (imx219_streaming != 0U) ? "on" : "off",
        dcmipp_capture_frozen, dcmipp_frame_done_tick, dcmipp_freeze_tick,
@@ -667,7 +667,11 @@ printf("heartbeat=%lu imx219=%lu stream=%s frozen=%lu done_tick=%lu freeze_tick=
        dcmipp_rgb565_min_b5, dcmipp_rgb565_max_b5,
        dcmipp_rgb565_s0, dcmipp_rgb565_s1, dcmipp_rgb565_s2, dcmipp_rgb565_s3,
        dcmipp_vsync_count, dcmipp_sof_count, dcmipp_eof_count,
-       dcmipp_last_error, dcmipp_csi_err1, dcmipp_csi_err2,
+       dcmipp_last_error,
+       (uint32_t)(((dcmipp_p1_sr & DCMIPP_P1SR_OVRF) != 0U) ? 1U : 0U),
+       (uint32_t)(((dcmipp_frame_count > 0U) &&
+                   ((dcmipp_last_error & HAL_DCMIPP_ERROR_PIPE1_OVR) != 0U)) ? 1U : 0U),
+       dcmipp_csi_err1, dcmipp_csi_err2,
        dcmipp_p0_sr, dcmipp_p1_sr, dcmipp_csi_sr0, dcmipp_csi_sr1);
 #if 0
 printf("heartbeat=%lu imx219_status=%lu imx219_id=0x%04lX stream=%s dcmipp_status=%lu frames=%lu hw_frames=%lu p0dump_bytes=%lu p0dcc_bytes=%lu expect_bytes=%lu buf_sum=0x%08lX buf_nz=%lu buf_changed=%lu buf_w0=0x%08lX buf_w1=0x%08lX buf_w2=0x%08lX buf_w3=0x%08lX buf_w4=0x%08lX buf_w5=0x%08lX buf_w6=0x%08lX buf_w7=0x%08lX raw16_valid=%lu raw16_align=%lu raw16_min=0x%04lX raw16_max=0x%04lX raw16_low6_nz=%lu raw16_high6_nz=%lu raw16_s0=0x%04lX raw16_s1=0x%04lX raw16_s2=0x%04lX raw16_s3=0x%04lX raw16_s4=0x%04lX raw16_s5=0x%04lX raw16_s6=0x%04lX raw16_s7=0x%04lX vsync=%lu sof=%lu eof=%lu perr=%lu lerr=%lu cerr=%lu spkt=%lu lb0=%lu lb_last=%lu dphy_samples=%lu err=0x%08lX sr0=0x%08lX sr1=0x%08lX cr=0x%08lX ier0=0x%08lX ier1=0x%08lX pfcr=0x%08lX pcr=0x%08lX lmcfgr=0x%08lX vc0cfgr1=0x%08lX vc0cfgr2=0x%08lX vc0cfgr3=0x%08lX vc0cfgr4=0x%08lX lb0cfgr=0x%08lX prgitr=0x%08lX csi_err1=0x%08lX csi_err2=0x%08lX spdfr=0x%08lX csi_prcr=0x%08lX csi_pmcr=0x%08lX cmcr=0x%08lX cmsr1=0x%08lX p0sr=0x%08lX p0ier=0x%08lX p0dclmtr=0x%08lX p0fscr=0x%08lX p0fctcr=0x%08lX p0ppcr=0x%08lX p0m0ar1=0x%08lX p0stm0ar=0x%08lX p0cfscr=0x%08lX p0cfctcr=0x%08lX p0cppcr=0x%08lX p0cm0ar1=0x%08lX p0scstr=0x%08lX p0scszr=0x%08lX p1sr=0x%08lX p1ier=0x%08lX p1fscr=0x%08lX p1fctcr=0x%08lX p1dmcr=0x%08lX p1dscr=0x%08lX p1dsrtior=0x%08lX p1dsszr=0x%08lX p1ppcr=0x%08lX p1m0ar1=0x%08lX p1m0pr=0x%08lX p1stm0ar=0x%08lX p1cfscr=0x%08lX p1cfctcr=0x%08lX p1cppcr=0x%08lX p1cm0ar1=0x%08lX p1cm0pr=0x%08lX cmsr2=0x%08lX cmier=0x%08lX ipgr1=0x%08lX ipc1r1=0x%08lX ipc1r2=0x%08lX ipc1r3=0x%08lX ipc2r1=0x%08lX ipc2r2=0x%08lX ipc2r3=0x%08lX ipc3r1=0x%08lX ipc3r2=0x%08lX ipc3r3=0x%08lX ipc4r1=0x%08lX ipc4r2=0x%08lX ipc4r3=0x%08lX ipc5r1=0x%08lX ipc5r2=0x%08lX ipc5r3=0x%08lX\r\n",
@@ -1424,10 +1428,11 @@ static void DCMIPP_FreezeCaptureForDump(void)
          (uint32_t)DCMIPP_VERIFY_FRAME_BYTES);
 }
 
-static void DCMIPP_LogPipe0Registers(const char *Tag)
+static void DCMIPP_LogPipeRegisters(const char *Tag)
 {
   DCMIPP_SampleCsiFlags();
-  printf("DCMIPP PIPE0 %s: configured_input=%lux%lu output=%lux%lu raw10_line_bytes=%lu pitch=%lu raw10_frame=%lu pipe0_dump=%lu buffer=%lu p0fscr=0x%08lX p0fctcr=0x%08lX p0ppcr=0x%08lX p0dclmtr=0x%08lX p0m0ar1=0x%08lX p0stm0ar=0x%08lX p0scstr=0x%08lX p0scszr=0x%08lX p0dcc_bytes=%lu sr0=0x%08lX sr1=0x%08lX csi_err1=0x%08lX csi_err2=0x%08lX spdfr=0x%08lX csi_prcr=0x%08lX csi_pmcr=0x%08lX dt=0x%02lX vc=0 downsize=%lu crop=%lu decimate=%lu pixel_packer=0x%08lX header=%lu\r\n",
+  printf("DCMIPP PIPE%lu %s: configured_input=%lux%lu output=%lux%lu raw10_line_bytes=%lu pitch=%lu raw10_frame=%lu frame_bytes=%lu buffer=%lu p0fscr=0x%08lX p0fctcr=0x%08lX p0ppcr=0x%08lX p0dclmtr=0x%08lX p0m0ar1=0x%08lX p0stm0ar=0x%08lX p0dcc_bytes=%lu p0sr=0x%08lX p1fscr=0x%08lX p1fctcr=0x%08lX p1dmcr=0x%08lX p1ppcr=0x%08lX p1m0ar1=0x%08lX p1m0pr=0x%08lX p1stm0ar=0x%08lX p1sr=0x%08lX p1_ovr=%lu sr0=0x%08lX sr1=0x%08lX csi_err1=0x%08lX csi_err2=0x%08lX spdfr=0x%08lX csi_prcr=0x%08lX csi_pmcr=0x%08lX dt=0x%02lX vc=0 downsize=%lu crop=%lu decimate=%lu pixel_packer=0x%08lX header=%lu\r\n",
+         (uint32_t)DCMIPP_VERIFY_CAPTURE_PIPE,
          Tag,
          (uint32_t)DCMIPP_VERIFY_WIDTH,
          (uint32_t)DCMIPP_VERIFY_HEIGHT,
@@ -1436,7 +1441,7 @@ static void DCMIPP_LogPipe0Registers(const char *Tag)
          (uint32_t)DCMIPP_VERIFY_RAW10_LINE_BYTES,
          (uint32_t)DCMIPP_VERIFY_LINE_PITCH,
          (uint32_t)DCMIPP_VERIFY_RAW10_FRAME_BYTES,
-         (uint32_t)DCMIPP_VERIFY_PIPE0_DUMP_BYTES,
+         (uint32_t)DCMIPP_VERIFY_FRAME_BYTES,
          (uint32_t)sizeof(dcmipp_frame_buffer),
          dcmipp_p0_fscr,
          dcmipp_p0_fctcr,
@@ -1444,9 +1449,17 @@ static void DCMIPP_LogPipe0Registers(const char *Tag)
          dcmipp_p0_dclmtr,
          dcmipp_p0_ppm0ar1,
          dcmipp_p0_stm0ar,
-         dcmipp_p0_scstr,
-         dcmipp_p0_scszr,
          dcmipp_p0_dccntr,
+         dcmipp_p0_sr,
+         dcmipp_p1_fscr,
+         dcmipp_p1_fctcr,
+         dcmipp_p1_dmcr,
+         dcmipp_p1_ppcr,
+         dcmipp_p1_ppm0ar1,
+         dcmipp_p1_ppm0pr,
+         dcmipp_p1_stm0ar,
+         dcmipp_p1_sr,
+         (uint32_t)(((dcmipp_p1_sr & DCMIPP_P1SR_OVRF) != 0U) ? 1U : 0U),
          dcmipp_csi_sr0,
          dcmipp_csi_sr1,
          dcmipp_csi_err1,
