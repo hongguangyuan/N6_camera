@@ -45,7 +45,7 @@ int32_t IMX219_EnterLp11(IMX219_Object_t *pObj);
 int32_t IMX219_Init(IMX219_Object_t *pObj, uint32_t Resolution, uint32_t PixelFormat);
 int32_t IMX219_Start(IMX219_Object_t *pObj);
 int32_t IMX219_Stop(IMX219_Object_t *pObj);
-int32_t IMX219_SetTestPattern(IMX219_Object_t *pObj, uint8_t Enable);
+int32_t IMX219_SetTestPattern(IMX219_Object_t *pObj, uint8_t Mode);
 int32_t IMX219_SetFrameTiming(IMX219_Object_t *pObj, uint16_t LineLength, uint16_t FrameLength);
 int32_t IMX219_SetExposureGain(IMX219_Object_t *pObj, uint16_t Exposure, uint8_t AnalogGain, uint16_t DigitalGain);
 int32_t IMX219_SetDebugOpPllMultiplier(IMX219_Object_t *pObj, uint16_t Multiplier);

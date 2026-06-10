@@ -272,14 +272,14 @@ int32_t IMX219_Stop(IMX219_Object_t *pObj)
   return IMX219_WriteReg8(pObj, IMX219_REG_MODE_SELECT, IMX219_MODE_STANDBY);
 }
 
-int32_t IMX219_SetTestPattern(IMX219_Object_t *pObj, uint8_t Enable)
+int32_t IMX219_SetTestPattern(IMX219_Object_t *pObj, uint8_t Mode)
 {
   if (pObj == NULL)
   {
     return IMX219_ERROR;
   }
 
-  return IMX219_WriteReg16(pObj, IMX219_REG_TEST_PATTERN, Enable ? 0x0002U : 0x0000U);
+  return IMX219_WriteReg16(pObj, IMX219_REG_TEST_PATTERN, (uint16_t)Mode);
 }
 
 int32_t IMX219_SetFrameTiming(IMX219_Object_t *pObj, uint16_t LineLength, uint16_t FrameLength)
