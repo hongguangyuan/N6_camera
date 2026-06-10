@@ -27,6 +27,7 @@ $gdbLines = @(
   "set pagination off",
   "target extended-remote localhost:3333",
   "monitor halt",
+  "printf `"DCMIPP_GDB_STATUS frozen=%u frames=%u stream=%u status=%u done_tick=%u freeze_tick=%u\n`", dcmipp_capture_frozen, dcmipp_frame_count, imx219_streaming, dcmipp_status, dcmipp_frame_done_tick, dcmipp_freeze_tick",
   ("dump binary memory {0} &dcmipp_frame_buffer ((char *)&dcmipp_frame_buffer)+{1}" -f ($rgb565 -replace "\\", "/"), $ByteCount)
 )
 if ($RepeatDumpCheck) {

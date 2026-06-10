@@ -16,16 +16,16 @@
 #define CAMERA_DEBUG_CSI_MONITOR_ONLY 0U
 #define CAMERA_DEBUG_PIPE_MONITOR_ONLY 0U
 #define IMX219_DEBUG_START_STREAM 1U
-#define IMX219_DEBUG_TEST_PATTERN 4U
+#define IMX219_DEBUG_TEST_PATTERN 0U
 #define IMX219_DEBUG_SLOW_TIMING 1U
-#define IMX219_DEBUG_LINE_LENGTH 20000U
-#define IMX219_DEBUG_FRAME_LENGTH 3000U
+#define IMX219_DEBUG_LINE_LENGTH 3560U
+#define IMX219_DEBUG_FRAME_LENGTH 1067U
 #define IMX219_DEBUG_LOW_LINK 1U
 #define IMX219_DEBUG_OP_PLL_MULT 0x0039U
 #define IMX219_DEBUG_LANE_COUNT 2U
 #define IMX219_DEBUG_EXPOSURE_GAIN 1U
-#define IMX219_DEBUG_ANALOG_GAIN 0x40U
-#define IMX219_DEBUG_EXPOSURE_LINES 0x0400U
+#define IMX219_DEBUG_ANALOG_GAIN 0x80U
+#define IMX219_DEBUG_EXPOSURE_LINES 0x0418U
 #define IMX219_DEBUG_DIGITAL_GAIN 0x0100U
 #define IMX219_DEBUG_REAL_FRAME_SETTLE_MS 1000U
 #define DCMIPP_VERIFY_FRAME_DONE_TIMEOUT_MS 5000U
@@ -61,7 +61,8 @@
 #define DCMIPP_VERIFY_LANE_MAPPING DCMIPP_CSI_PHYSICAL_DATA_LANES
 #define DCMIPP_VERIFY_NUMBER_OF_LANES DCMIPP_CSI_TWO_DATA_LANES
 #define DCMIPP_VERIFY_CAPTURE_PIPE DCMIPP_PIPE1
-#define DCMIPP_VERIFY_CAPTURE_MODE DCMIPP_MODE_SNAPSHOT
+#define DCMIPP_VERIFY_CAPTURE_MODE DCMIPP_MODE_CONTINUOUS
+#define DCMIPP_VERIFY_FREEZE_AFTER_FRAMES 30U
 #define DCMIPP_VERIFY_DATA_TYPE_MODE DCMIPP_DTMODE_DTIDA
 #define DCMIPP_VERIFY_DUMP_HEADER 0U
 #define DCMIPP_VERIFY_PIPE0_LIMIT_WORDS 0U
@@ -88,13 +89,16 @@
 #define DCMIPP_VERIFY_RAW16_DUMP_LINES 2U
 #define DCMIPP_VERIFY_RGB565_DUMP_PIXELS 16U
 #define DCMIPP_VERIFY_RGB565_DUMP_LINES 2U
-#define DCMIPP_VERIFY_PIPE1_BLACK_LEVEL 16U
-#define DCMIPP_VERIFY_PIPE1_EXPOSURE_SHIFT 6U
-#define DCMIPP_VERIFY_PIPE1_WB_R_MULT 80U
-#define DCMIPP_VERIFY_PIPE1_WB_G_MULT 64U
-#define DCMIPP_VERIFY_PIPE1_WB_B_MULT 80U
+#define DCMIPP_VERIFY_PIPE1_BLACK_LEVEL 12U
+#define DCMIPP_VERIFY_ISP_GAIN_1X 100000000U
+#define DCMIPP_VERIFY_PIPE1_WB_R_GAIN DCMIPP_VERIFY_ISP_GAIN_1X
+#define DCMIPP_VERIFY_PIPE1_WB_G_GAIN DCMIPP_VERIFY_ISP_GAIN_1X
+#define DCMIPP_VERIFY_PIPE1_WB_B_GAIN DCMIPP_VERIFY_ISP_GAIN_1X
 #define DCMIPP_VERIFY_PIPE1_BAYER DCMIPP_RAWBAYER_RGGB
 #define DCMIPP_VERIFY_PIPE1_BAYER_STRENGTH DCMIPP_RAWBAYER_ALGO_STRENGTH_8
+#define DCMIPP_VERIFY_PIPE1_ENABLE_BLACK_LEVEL 1U
+#define DCMIPP_VERIFY_PIPE1_ENABLE_EXPOSURE 1U
+#define DCMIPP_VERIFY_PIPE1_ENABLE_GAMMA 1U
 #define DCMIPP_CSI_DPHY_DATA_LANE_ERROR_IT                                         \
   (DCMIPP_CSI_IT_ECTRLDL1 | DCMIPP_CSI_IT_ESYNCESCDL1 | DCMIPP_CSI_IT_EESCDL1 |    \
    DCMIPP_CSI_IT_ESOTSYNCDL1 | DCMIPP_CSI_IT_ESOTDL1 | DCMIPP_CSI_IT_ECTRLDL0 |    \
@@ -263,11 +267,14 @@ static void DCMIPP_LogPipeRegisters(const char *Tag);
 static void DCMIPP_SampleCsiFlags(void);
 static void DCMIPP_ClearCsiFlags(void);
 static uint32_t DCMIPP_WaitForDphyStopState(uint32_t TimeoutMs);
+static void DCMIPP_ToExposureShiftMultiplier(uint32_t Gain, uint8_t *Shift, uint8_t *Multiplier);
 static void DCMIPP_UpdateBufferStats(void);
 #if (DCMIPP_VERIFY_DUMP_RAW16_LAYOUT != 0U)
 static void DCMIPP_DumpRaw16Layout(void);
 #endif
+#if (DCMIPP_VERIFY_DUMP_RGB565_LAYOUT != 0U)
 static void DCMIPP_DumpRGB565Layout(void);
+#endif
 static void DCMIPP_FillBuffer(uint8_t Value);
 static void DCMIPP_CleanBuffer(void);
 static void DCMIPP_InvalidateBuffer(void);
@@ -305,13 +312,14 @@ void CameraDebug_InitAndStart(I2C_HandleTypeDef *hi2c)
   printf("USART3: 115200 8N1, I2C addr: 0x%02lX, expected ID: 0x%04lX\r\n",
          (uint32_t)IMX219_I2C_ADDR_7BIT, (uint32_t)IMX219_CHIP_ID);
 #if (CAMERA_DEBUG_I2C_ONLY == 0U)
-  printf("DCMIPP: %lux%lu RAW10 on VC0, output=%lux%lu, lanes=%lu, lane_map=%lu, PHY BT index=%lu, PIPE%lu mode=0x%08lX buffer=%lu bytes/%lu words, raw10_in=%lu bytes/%lu words, pipe0_dump=%lu bytes/%lu words, pixel_packer=0x%08lX pitch=%lu, downsize=%lu, p0_limit_words=%lu, p0_decimate=%lu byte_sel=0x%08lX line_sel=0x%08lX, p0_crop=%lu crop_h=%lu crop_v=%lu, test_pattern=%lu, slow_timing=%lu line=%lu frame=%lu, low_link=%lu low_link_op_pll=0x%04lX, dtmode=%lu, dump_header=%lu, ipplug_cfg=%lu, cache_maint=%lu\r\n",
+  printf("DCMIPP: %lux%lu RAW10 on VC0, output=%lux%lu, lanes=%lu, lane_map=%lu, PHY BT index=%lu, PIPE%lu mode=0x%08lX freeze_after_frames=%lu buffer=%lu bytes/%lu words, raw10_in=%lu bytes/%lu words, pipe0_dump=%lu bytes/%lu words, pixel_packer=0x%08lX pitch=%lu, downsize=%lu, p0_limit_words=%lu, p0_decimate=%lu byte_sel=0x%08lX line_sel=0x%08lX, p0_crop=%lu crop_h=%lu crop_v=%lu, test_pattern=%lu, slow_timing=%lu line=%lu frame=%lu, low_link=%lu low_link_op_pll=0x%04lX, dtmode=%lu, dump_header=%lu, ipplug_cfg=%lu, cache_maint=%lu\r\n",
          (uint32_t)DCMIPP_VERIFY_WIDTH, (uint32_t)DCMIPP_VERIFY_HEIGHT,
          (uint32_t)DCMIPP_VERIFY_OUTPUT_WIDTH, (uint32_t)DCMIPP_VERIFY_OUTPUT_HEIGHT,
          (uint32_t)(DCMIPP_VERIFY_NUMBER_OF_LANES >> CSI_LMCFGR_LANENB_Pos),
          (uint32_t)DCMIPP_VERIFY_LANE_MAPPING, (uint32_t)DCMIPP_VERIFY_PHY_BITRATE,
          (uint32_t)DCMIPP_VERIFY_CAPTURE_PIPE,
          (uint32_t)DCMIPP_VERIFY_CAPTURE_MODE,
+         (uint32_t)DCMIPP_VERIFY_FREEZE_AFTER_FRAMES,
          (uint32_t)DCMIPP_VERIFY_BUFFER_BYTES,
          (uint32_t)DCMIPP_VERIFY_BUFFER_WORDS,
          (uint32_t)DCMIPP_VERIFY_RAW10_FRAME_BYTES,
@@ -538,7 +546,8 @@ void CameraDebug_InitAndStart(I2C_HandleTypeDef *hi2c)
   return;
 #endif
 
-  printf("DCMIPP wait frame complete before dump freeze: timeout=%lu ms\r\n",
+  printf("DCMIPP wait frame complete before dump freeze: target_frames=%lu timeout=%lu ms\r\n",
+         (uint32_t)DCMIPP_VERIFY_FREEZE_AFTER_FRAMES,
          (uint32_t)DCMIPP_VERIFY_FRAME_DONE_TIMEOUT_MS);
   if (DCMIPP_WaitForFrameComplete(DCMIPP_VERIFY_FRAME_DONE_TIMEOUT_MS) == 0U)
   {
@@ -775,8 +784,12 @@ static void MX_DCMIPP_Init(void)
   DCMIPP_CSI_LineByteCounterConfTypeDef line_byte_conf = {0};
   DCMIPP_PipeConfTypeDef pipe_conf = {0};
   DCMIPP_RawBayer2RGBConfTypeDef raw_bayer_conf = {0};
+#if (DCMIPP_VERIFY_PIPE1_ENABLE_BLACK_LEVEL != 0U)
   DCMIPP_BlackLevelConfTypeDef black_level_conf = {0};
+#endif
+#if (DCMIPP_VERIFY_PIPE1_ENABLE_EXPOSURE != 0U)
   DCMIPP_ExposureConfTypeDef exposure_conf = {0};
+#endif
 #if (DCMIPP_VERIFY_ENABLE_DOWNSIZE != 0U)
   DCMIPP_DownsizeTypeDef downsize_conf = {0};
 #endif
@@ -870,6 +883,7 @@ static void MX_DCMIPP_Init(void)
 
   if (DCMIPP_VERIFY_CAPTURE_PIPE == DCMIPP_PIPE1)
   {
+#if (DCMIPP_VERIFY_PIPE1_ENABLE_BLACK_LEVEL != 0U)
     black_level_conf.RedCompBlackLevel = DCMIPP_VERIFY_PIPE1_BLACK_LEVEL;
     black_level_conf.GreenCompBlackLevel = DCMIPP_VERIFY_PIPE1_BLACK_LEVEL;
     black_level_conf.BlueCompBlackLevel = DCMIPP_VERIFY_PIPE1_BLACK_LEVEL;
@@ -883,13 +897,18 @@ static void MX_DCMIPP_Init(void)
     {
       Error_Handler();
     }
+#endif
 
-    exposure_conf.ShiftRed = DCMIPP_VERIFY_PIPE1_EXPOSURE_SHIFT;
-    exposure_conf.MultiplierRed = DCMIPP_VERIFY_PIPE1_WB_R_MULT;
-    exposure_conf.ShiftGreen = DCMIPP_VERIFY_PIPE1_EXPOSURE_SHIFT;
-    exposure_conf.MultiplierGreen = DCMIPP_VERIFY_PIPE1_WB_G_MULT;
-    exposure_conf.ShiftBlue = DCMIPP_VERIFY_PIPE1_EXPOSURE_SHIFT;
-    exposure_conf.MultiplierBlue = DCMIPP_VERIFY_PIPE1_WB_B_MULT;
+#if (DCMIPP_VERIFY_PIPE1_ENABLE_EXPOSURE != 0U)
+    DCMIPP_ToExposureShiftMultiplier(DCMIPP_VERIFY_PIPE1_WB_R_GAIN,
+                                     &exposure_conf.ShiftRed,
+                                     &exposure_conf.MultiplierRed);
+    DCMIPP_ToExposureShiftMultiplier(DCMIPP_VERIFY_PIPE1_WB_G_GAIN,
+                                     &exposure_conf.ShiftGreen,
+                                     &exposure_conf.MultiplierGreen);
+    DCMIPP_ToExposureShiftMultiplier(DCMIPP_VERIFY_PIPE1_WB_B_GAIN,
+                                     &exposure_conf.ShiftBlue,
+                                     &exposure_conf.MultiplierBlue);
     if (HAL_DCMIPP_PIPE_SetISPExposureConfig(&hdcmipp,
                                              DCMIPP_VERIFY_CAPTURE_PIPE,
                                              &exposure_conf) != HAL_OK)
@@ -900,6 +919,7 @@ static void MX_DCMIPP_Init(void)
     {
       Error_Handler();
     }
+#endif
 
     raw_bayer_conf.RawBayerType = DCMIPP_VERIFY_PIPE1_BAYER;
     raw_bayer_conf.PeakStrength = DCMIPP_VERIFY_PIPE1_BAYER_STRENGTH;
@@ -916,10 +936,12 @@ static void MX_DCMIPP_Init(void)
     {
       Error_Handler();
     }
+#if (DCMIPP_VERIFY_PIPE1_ENABLE_GAMMA != 0U)
     if (HAL_DCMIPP_PIPE_EnableGammaConversion(&hdcmipp, DCMIPP_VERIFY_CAPTURE_PIPE) != HAL_OK)
     {
       Error_Handler();
     }
+#endif
 
 #if (DCMIPP_VERIFY_ENABLE_DOWNSIZE != 0U)
     downsize_conf.HSize = DCMIPP_VERIFY_OUTPUT_WIDTH;
@@ -1304,7 +1326,7 @@ static uint32_t DCMIPP_WaitForFrameComplete(uint32_t TimeoutMs)
   do
   {
     DCMIPP_SampleCsiFlags();
-    if ((dcmipp_frame_count > 0U) &&
+    if ((dcmipp_frame_count >= DCMIPP_VERIFY_FREEZE_AFTER_FRAMES) &&
         ((DCMIPP_VERIFY_CAPTURE_PIPE != DCMIPP_PIPE0) || (dcmipp_p0_dccntr >= DCMIPP_VERIFY_FRAME_BYTES)))
     {
       if (dcmipp_frame_done_tick == 0U)
@@ -1669,6 +1691,22 @@ static uint32_t DCMIPP_WaitForDphyStopState(uint32_t TimeoutMs)
   return 0U;
 }
 
+static void DCMIPP_ToExposureShiftMultiplier(uint32_t Gain, uint8_t *Shift, uint8_t *Multiplier)
+{
+  uint64_t val = (uint64_t)Gain;
+
+  val = (val * 128ULL) / DCMIPP_VERIFY_ISP_GAIN_1X;
+
+  *Shift = 0U;
+  while (val >= 256ULL)
+  {
+    val /= 2ULL;
+    (*Shift)++;
+  }
+
+  *Multiplier = (uint8_t)val;
+}
+
 static void DCMIPP_UpdateBufferStats(void)
 {
   const volatile uint8_t *buf = dcmipp_frame_buffer;
@@ -1950,6 +1988,7 @@ static void DCMIPP_DumpRaw16Layout(void)
 }
 #endif
 
+#if (DCMIPP_VERIFY_DUMP_RGB565_LAYOUT != 0U)
 static void DCMIPP_DumpRGB565Layout(void)
 {
   const volatile uint8_t *buf = dcmipp_frame_buffer;
@@ -1963,6 +2002,12 @@ static void DCMIPP_DumpRGB565Layout(void)
   uint32_t line_count = DCMIPP_VERIFY_RGB565_DUMP_LINES;
   uint32_t pixel_count = DCMIPP_VERIFY_RGB565_DUMP_PIXELS;
   uint32_t sample_count = DCMIPP_VERIFY_WIDTH * DCMIPP_VERIFY_HEIGHT;
+  uint8_t wb_shift_r = 0U;
+  uint8_t wb_shift_g = 0U;
+  uint8_t wb_shift_b = 0U;
+  uint8_t wb_mult_r = 0U;
+  uint8_t wb_mult_g = 0U;
+  uint8_t wb_mult_b = 0U;
 
   if (line_count > DCMIPP_VERIFY_HEIGHT)
   {
@@ -2012,19 +2057,31 @@ static void DCMIPP_DumpRGB565Layout(void)
     }
   }
 
-  printf("RGB565 layout: frame_bytes=%lu stride_bytes=%lu pixels=%lux%lu printed_lines=%lu black_level=%lu wb_mult_r/g/b=%lu/%lu/%lu wb_shift=%lu bayer=%lu bayer_strength=%lu gamma=1 r5=0x%02lX..0x%02lX g6=0x%02lX..0x%02lX b5=0x%02lX..0x%02lX zero=%lu/%lu\r\n",
+  DCMIPP_ToExposureShiftMultiplier(DCMIPP_VERIFY_PIPE1_WB_R_GAIN, &wb_shift_r, &wb_mult_r);
+  DCMIPP_ToExposureShiftMultiplier(DCMIPP_VERIFY_PIPE1_WB_G_GAIN, &wb_shift_g, &wb_mult_g);
+  DCMIPP_ToExposureShiftMultiplier(DCMIPP_VERIFY_PIPE1_WB_B_GAIN, &wb_shift_b, &wb_mult_b);
+
+  printf("RGB565 layout: frame_bytes=%lu stride_bytes=%lu pixels=%lux%lu printed_lines=%lu black_level_en=%lu black_level=%lu exposure_en=%lu wb_gain_r/g/b=%lu/%lu/%lu wb_reg_s/m_r=%lu/%lu wb_reg_s/m_g=%lu/%lu wb_reg_s/m_b=%lu/%lu bayer=%lu bayer_strength=%lu gamma=%lu r5=0x%02lX..0x%02lX g6=0x%02lX..0x%02lX b5=0x%02lX..0x%02lX zero=%lu/%lu\r\n",
          (uint32_t)DCMIPP_VERIFY_FRAME_BYTES,
          (uint32_t)DCMIPP_VERIFY_RGB565_LINE_BYTES,
          (uint32_t)DCMIPP_VERIFY_WIDTH,
          (uint32_t)DCMIPP_VERIFY_HEIGHT,
          line_count,
+         (uint32_t)DCMIPP_VERIFY_PIPE1_ENABLE_BLACK_LEVEL,
          (uint32_t)DCMIPP_VERIFY_PIPE1_BLACK_LEVEL,
-         (uint32_t)DCMIPP_VERIFY_PIPE1_WB_R_MULT,
-         (uint32_t)DCMIPP_VERIFY_PIPE1_WB_G_MULT,
-         (uint32_t)DCMIPP_VERIFY_PIPE1_WB_B_MULT,
-         (uint32_t)DCMIPP_VERIFY_PIPE1_EXPOSURE_SHIFT,
+         (uint32_t)DCMIPP_VERIFY_PIPE1_ENABLE_EXPOSURE,
+         (uint32_t)DCMIPP_VERIFY_PIPE1_WB_R_GAIN,
+         (uint32_t)DCMIPP_VERIFY_PIPE1_WB_G_GAIN,
+         (uint32_t)DCMIPP_VERIFY_PIPE1_WB_B_GAIN,
+         (uint32_t)wb_shift_r,
+         (uint32_t)wb_mult_r,
+         (uint32_t)wb_shift_g,
+         (uint32_t)wb_mult_g,
+         (uint32_t)wb_shift_b,
+         (uint32_t)wb_mult_b,
          (uint32_t)DCMIPP_VERIFY_PIPE1_BAYER,
          (uint32_t)DCMIPP_VERIFY_PIPE1_BAYER_STRENGTH,
+         (uint32_t)DCMIPP_VERIFY_PIPE1_ENABLE_GAMMA,
          min_r5,
          max_r5,
          min_g6,
@@ -2046,6 +2103,7 @@ static void DCMIPP_DumpRGB565Layout(void)
     printf("\r\n");
   }
 }
+#endif
 
 static void DCMIPP_FillBuffer(uint8_t Value)
 {
