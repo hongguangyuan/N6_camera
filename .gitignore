@@ -1,4 +1,7 @@
 Makefile/*/build/
+captures/
+__pycache__/
+tools/__pycache__/
 *.elf
 *.hex
 *.bin
@@ -6,4 +9,3 @@ Makefile/*/build/
 *.lst
 *.d
 *.o
-

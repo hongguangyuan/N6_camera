@@ -267,6 +267,9 @@ Regardless of the interface type, the pipe configuration is necessary:
 #define GET_MATRIX_VALUE11(value) ((((value) & 0x400U) == 0x400U) ? ((uint16_t)((value) | 0xF800U)) : (value))
 #define GET_MATRIX_VALUE10(value) ((((value) & 0x200U) == 0x200U) ? ((uint16_t)((value) | 0xFC00U)) : (value))
 #define DCMIPP_TIMEOUT 1000U  /*!<  1s  */
+#ifndef DCMIPP_CSI_PHY_REG08_VALUE
+#define DCMIPP_CSI_PHY_REG08_VALUE 0x38U
+#endif
 /**
   * @}
   */
@@ -724,8 +727,8 @@ HAL_StatusTypeDef HAL_DCMIPP_CSI_SetConfig(const DCMIPP_HandleTypeDef *hdcmipp,
   MODIFY_REG(csi_instance->PFCR, CSI_PFCR_HSFR, (0x28U << CSI_PFCR_CCFR_Pos) |
              (SNPS_Freqs[pCSI_Config->PHYBitrate].hsfreqrange << CSI_PFCR_HSFR_Pos));
 
-  /* set reg @08 deskew_polarity_rw 1'b1 */
-  DCMIPP_CSI_WritePHYReg(csi_instance, 0x00, 0x08, 0x38);
+  /* set reg @08 deskew configuration */
+  DCMIPP_CSI_WritePHYReg(csi_instance, 0x00, 0x08, DCMIPP_CSI_PHY_REG08_VALUE);
 
   /* set reg @0xE4 counter_for_des_en_config_if_rx 0x10 + DLL prog EN */
   /* This is because 13<= cfgclkfreqrange[5:0]<=38 */
@@ -733,8 +736,8 @@ HAL_StatusTypeDef HAL_DCMIPP_CSI_SetConfig(const DCMIPP_HandleTypeDef *hdcmipp,
 
   /* set reg @0xe3 & reg @0xe2 value DLL target oscilation freq */
   /* Based on the table page 77, osc_freq_target */
-  DCMIPP_CSI_WritePHYReg(csi_instance, 0x00, 0xe3, SNPS_Freqs[pCSI_Config->PHYBitrate].osc_freq_target >> 8);
-  DCMIPP_CSI_WritePHYReg(csi_instance, 0x00, 0xe3, SNPS_Freqs[pCSI_Config->PHYBitrate].osc_freq_target & 0xFFU);
+  DCMIPP_CSI_WritePHYReg(csi_instance, 0x00, 0xe2, SNPS_Freqs[pCSI_Config->PHYBitrate].osc_freq_target & 0xFFU);
+  DCMIPP_CSI_WritePHYReg(csi_instance, 0x00, 0xe3, (SNPS_Freqs[pCSI_Config->PHYBitrate].osc_freq_target >> 8) & 0x0FU);
 
   /* set basedir_0 to RX DLD 0 RX, 1 TX. Synopsys 1 RX 0 TX  + freq range */
   WRITE_REG(csi_instance-> PFCR, (0x28U << CSI_PFCR_CCFR_Pos) |
@@ -8600,4 +8603,3 @@ static HAL_StatusTypeDef DCMIPP_CSI_VCStop(const DCMIPP_HandleTypeDef *hdcmipp, 
   */
 #endif /* DCMIPP */
 #endif /* HAL_DCMIPP_MODULE_ENABLED */
-

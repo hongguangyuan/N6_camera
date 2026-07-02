@@ -1,0 +1,12 @@
+[
+  {
+    "directory": "E:/VSCODE/n6/camera/Makefile/Appli",
+    "command": "D:/arm/bin/arm-none-eabi-gcc.exe -mcpu=cortex-m55 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard -DUSE_HAL_DRIVER -DSTM32N657xx -I../../Appli/Core/Inc -I../../Secure_nsclib -I../../Drivers/BSP/Components/imx219 -I../../Drivers/STM32N6xx_HAL_Driver/Inc -I../../Drivers/STM32N6xx_HAL_Driver/Inc/Legacy -I../../Drivers/CMSIS/Include -I../../Drivers/CMSIS/Device/ST/STM32N6xx/Include -Og -Wall -fdata-sections -ffunction-sections -g -gdwarf-2 -mcmse -c ../../Appli/Core/Src/main.c",
+    "file": "E:/VSCODE/n6/camera/Appli/Core/Src/main.c"
+  },
+  {
+    "directory": "E:/VSCODE/n6/camera/Makefile/FSBL",
+    "command": "D:/arm/bin/arm-none-eabi-gcc.exe -mcpu=cortex-m55 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard -DUSE_HAL_DRIVER -DSTM32N657xx -I../../FSBL/Core/Inc -I../../Middlewares/ST/STM32_ExtMem_Manager -I../../Middlewares/ST/STM32_ExtMem_Manager/boot -I../../Middlewares/ST/STM32_ExtMem_Manager/nor_sfdp -I../../Middlewares/ST/STM32_ExtMem_Manager/sal -I../../Drivers/STM32N6xx_HAL_Driver/Inc -I../../Drivers/STM32N6xx_HAL_Driver/Inc/Legacy -I../../Drivers/CMSIS/Include -I../../Drivers/CMSIS/Device/ST/STM32N6xx/Include -Og -Wall -fdata-sections -ffunction-sections -g -gdwarf-2 -mcmse -c ../../FSBL/Core/Src/main.c",
+    "file": "E:/VSCODE/n6/camera/FSBL/Core/Src/main.c"
+  }
+]

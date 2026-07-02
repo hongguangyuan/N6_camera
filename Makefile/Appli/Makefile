@@ -38,7 +38,8 @@ BUILD_DIR = build
 C_SOURCES =  \
 ../../Appli/Core/Src/main.c \
 ../../Appli/Core/Src/gpio.c \
-../../Appli/Core/Src/camera_debug.c \
+../../Appli/Core/Src/camera_bringup.c \
+../../Appli/Core/Src/camera_pipeline.c \
 ../../Appli/Core/Src/csi.c \
 ../../Appli/Core/Src/i2c.c \
 ../../Appli/Core/Src/usart.c \
@@ -46,6 +47,9 @@ C_SOURCES =  \
 ../../Appli/Core/Src/stm32n6xx_hal_msp.c \
 ../../Appli/Core/Src/secure_nsc.c \
 ../../Drivers/BSP/Components/imx219/imx219.c \
+E:/a_hardware/stm32cuben6-v1-3-0/STM32Cube_FW_N6_V1.3.0/Middlewares/ST/STM32_ISP_Library/isp/Src/isp_algo.c \
+E:/a_hardware/stm32cuben6-v1-3-0/STM32Cube_FW_N6_V1.3.0/Middlewares/ST/STM32_ISP_Library/isp/Src/isp_core.c \
+E:/a_hardware/stm32cuben6-v1-3-0/STM32Cube_FW_N6_V1.3.0/Middlewares/ST/STM32_ISP_Library/isp/Src/isp_services.c \
 ../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_cortex.c \
 ../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_dcmipp.c \
 ../../Drivers/STM32N6xx_HAL_Driver/Src/stm32n6xx_hal_rcc.c \
@@ -130,7 +134,9 @@ C_INCLUDES =  \
 -I../../Drivers/STM32N6xx_HAL_Driver/Inc \
 -I../../Drivers/CMSIS/Device/ST/STM32N6xx/Include \
 -I../../Drivers/STM32N6xx_HAL_Driver/Inc/Legacy \
--I../../Drivers/CMSIS/Include
+-I../../Drivers/CMSIS/Include \
+-IE:/a_hardware/stm32cuben6-v1-3-0/STM32Cube_FW_N6_V1.3.0/Middlewares/ST/STM32_ISP_Library/isp/Inc \
+-IE:/a_hardware/stm32cuben6-v1-3-0/STM32Cube_FW_N6_V1.3.0/Middlewares/ST/STM32_ISP_Library/evision/Inc
 
 
 # compile gcc flags
@@ -154,8 +160,8 @@ CFLAGS += -mcmse -MMD -MP -MF"$(@:%.o=%.d)"
 LDSCRIPT = STM32N657XX_LRUN.ld
 
 # libraries
-LIBS = -lc -lm -lnosys 
-LIBDIR = 
+LIBS = -l:libn6-evision-awb_gcc.a -l:libn6-evision-st-ae_gcc.a -lc -lm -lnosys 
+LIBDIR = -LE:/a_hardware/stm32cuben6-v1-3-0/STM32Cube_FW_N6_V1.3.0/Middlewares/ST/STM32_ISP_Library/evision/Lib
 LDFLAGS = $(MCU) -specs=nano.specs -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map,--cref -Wl,--gc-sections -Wl,--cmse-implib -Wl,--out-implib=./build/secure_nsclib.o
 
 # default action: build all

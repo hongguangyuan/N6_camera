@@ -4,6 +4,7 @@ param(
   [string]$Gdb = "D:/ST/STM32CubeIDE_2.1.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.externaltools.gnu-tools-for-stm32.14.3.rel1.win32_1.0.100.202602081740/tools/bin/arm-none-eabi-gdb.exe",
   [string]$OpenOcdScripts = "D:/ST/STM32CubeIDE_2.1.0/STM32CubeIDE/plugins/com.st.stm32cube.ide.mcu.debug.openocd_2.3.300.202602021527/resources/openocd/st_scripts",
   [UInt32]$VectorTable = 0x34000400,
+  [UInt32]$AdapterSpeed = 3300,
   [switch]$HaltAtMain
 )
 
@@ -52,7 +53,8 @@ $gdbLines | Set-Content -Encoding ASCII -Path $gdbCmd
 $openOcdArgs = @(
   "-s", $OpenOcdScripts,
   "-f", "interface/stlink-dap.cfg",
-  "-f", "target/stm32n6x.cfg"
+  "-f", "target/stm32n6x.cfg",
+  "-c", "`"adapter speed $AdapterSpeed`""
 )
 
 $p = Start-Process -FilePath $OpenOcd `
@@ -92,5 +94,6 @@ finally {
 
 Write-Host "FLASH_RUN_ELF=$Elf"
 Write-Host ("VECTOR_TABLE=0x{0:X8}" -f $VectorTable)
+Write-Host "ADAPTER_SPEED_KHZ=$AdapterSpeed"
 Write-Host "OPENOCD_LOG=$log"
 Write-Host "OPENOCD_ERR=$err"

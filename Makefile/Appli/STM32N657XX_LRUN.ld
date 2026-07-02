@@ -180,7 +180,7 @@ SECTIONS
   PROVIDE( __data_source_size = __data_source_end - __data_source );
 
 
-  .noncacheable :
+  .noncacheable (NOLOAD) :
   {
     . = ALIGN(8);
     __snoncacheable = .;/* create symbol for start of section */

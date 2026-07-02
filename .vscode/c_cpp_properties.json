@@ -2,6 +2,34 @@
     "version": 4,
     "configurations": [
         {
+            "name": "Appli",
+            "includePath": [
+                "${workspaceFolder}/Appli/Core/Inc",
+                "${workspaceFolder}/Secure_nsclib",
+                "${workspaceFolder}/Drivers/BSP/Components/imx219",
+                "${workspaceFolder}/Drivers/STM32N6xx_HAL_Driver/Inc",
+                "${workspaceFolder}/Drivers/STM32N6xx_HAL_Driver/Inc/Legacy",
+                "${workspaceFolder}/Drivers/CMSIS/Include",
+                "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32N6xx/Include"
+            ],
+            "defines": [
+                "USE_HAL_DRIVER",
+                "STM32N657xx"
+            ],
+            "compilerPath": "D:/arm/bin/arm-none-eabi-gcc.exe",
+            "compileCommands": "${workspaceFolder}/compile_commands.json",
+            "compilerArgs": [
+                "-mcpu=cortex-m55",
+                "-mthumb",
+                "-mfpu=fpv5-d16",
+                "-mfloat-abi=hard",
+                "-mcmse"
+            ],
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-gcc-arm"
+        },
+        {
             "name": "FSBL",
             "includePath": [
                 "${workspaceFolder}/FSBL/Core/Inc",
@@ -19,32 +47,7 @@
                 "STM32N657xx"
             ],
             "compilerPath": "D:/arm/bin/arm-none-eabi-gcc.exe",
-            "compilerArgs": [
-                "-mcpu=cortex-m55",
-                "-mthumb",
-                "-mfpu=fpv5-d16",
-                "-mfloat-abi=hard",
-                "-mcmse"
-            ],
-            "cStandard": "c11",
-            "cppStandard": "c++17",
-            "intelliSenseMode": "windows-gcc-arm"
-        },
-        {
-            "name": "Appli",
-            "includePath": [
-                "${workspaceFolder}/Appli/Core/Inc",
-                "${workspaceFolder}/Secure_nsclib",
-                "${workspaceFolder}/Drivers/STM32N6xx_HAL_Driver/Inc",
-                "${workspaceFolder}/Drivers/STM32N6xx_HAL_Driver/Inc/Legacy",
-                "${workspaceFolder}/Drivers/CMSIS/Include",
-                "${workspaceFolder}/Drivers/CMSIS/Device/ST/STM32N6xx/Include"
-            ],
-            "defines": [
-                "USE_HAL_DRIVER",
-                "STM32N657xx"
-            ],
-            "compilerPath": "D:/arm/bin/arm-none-eabi-gcc.exe",
+            "compileCommands": "${workspaceFolder}/compile_commands.json",
             "compilerArgs": [
                 "-mcpu=cortex-m55",
                 "-mthumb",

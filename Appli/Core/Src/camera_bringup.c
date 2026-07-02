@@ -1,3 +1,9 @@
+#ifndef CAMERA_BRINGUP_ENABLE
+#define CAMERA_BRINGUP_ENABLE 0U
+#endif
+
+#if (CAMERA_BRINGUP_ENABLE != 0U)
+
 #include "camera_debug.h"
 #include "main.h"
 #include "imx219.h"
@@ -2568,3 +2574,5 @@ static void DCMIPP_InvalidateBuffer(void)
 }
 
 /* USER CODE END camera_debug */
+
+#endif /* CAMERA_BRINGUP_ENABLE */

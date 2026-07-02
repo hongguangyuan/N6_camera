@@ -25,7 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "camera_debug.h"
+#include "camera_pipeline.h"
 #include <stdio.h>
 /* USER CODE END Includes */
 
@@ -35,7 +35,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define CAMERA_DEBUG_CONFIG_RISAF 0U
+#define CAMERA_DEBUG_CONFIG_RISAF 1U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -82,12 +82,18 @@ int main(void)
   MX_GPIO_Init();
   MX_USART3_UART_Init();
   MX_I2C1_Init();
-  SystemIsolation_Config();
   /* USER CODE BEGIN 2 */
   __enable_irq();
   printf("\r\nFSBL->Appli camera application start\r\n");
-  printf("SystemIsolation: risaf=%lu\r\n", (uint32_t)CAMERA_DEBUG_CONFIG_RISAF);
-  CameraDebug_InitAndStart(&hi2c1);
+  printf("SystemIsolation: before config\r\n");
+  SystemIsolation_Config();
+  printf("SystemIsolation: risaf=%lu dapcid=0x%08lX\r\n",
+         (uint32_t)CAMERA_DEBUG_CONFIG_RISAF,
+         (uint32_t)HAL_RIF_RIMC_GetDebugAccessPortCID());
+  if (CameraPipeline_InitAndStart(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
   /* USER CODE END 2 */
 
@@ -98,7 +104,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    CameraDebug_Task();
+    CameraPipeline_Task();
   }
   /* USER CODE END 3 */
 }
@@ -110,13 +116,13 @@ int main(void)
  */
 static void SystemIsolation_Config(void)
 {
-
   /* USER CODE BEGIN RIF_Init 0 */
 
   /* USER CODE END RIF_Init 0 */
 
   /* set all required IPs as secure privileged */
   __HAL_RCC_RIFSC_CLK_ENABLE();
+  HAL_RIF_RIMC_SetDebugAccessPortCID(RIF_CID_1);
 
   /* RIF-Aware IPs Config */
 
@@ -135,32 +141,26 @@ static void SystemIsolation_Config(void)
 
   __HAL_RCC_RISAF_CLK_ENABLE();
 
+  /*
+   * Keep the application in the secure world, but make the main RAM/flash
+   * regions readable and writable by every RIF compartment. This is useful
+   * during camera bring-up because the DCMIPP frame buffer is in CPUAXI RAM0
+   * at 0x34082000 and external debug tools may use a different CID.
+   */
   risaf_base_config.Filtering = RISAF_FILTER_ENABLE;
-  risaf_base_config.ReadWhitelist = 255;
-  risaf_base_config.WriteWhitelist = 255;
+  risaf_base_config.ReadWhitelist = RIF_CID_0 | RIF_CID_1 | RIF_CID_2 | RIF_CID_3 |
+                                    RIF_CID_4 | RIF_CID_5 | RIF_CID_6 | RIF_CID_7;
+  risaf_base_config.WriteWhitelist = RIF_CID_0 | RIF_CID_1 | RIF_CID_2 | RIF_CID_3 |
+                                     RIF_CID_4 | RIF_CID_5 | RIF_CID_6 | RIF_CID_7;
   risaf_base_config.Secure = RIF_ATTRIBUTE_SEC;
-  risaf_base_config.PrivWhitelist = RIF_CID_NONE;
+  risaf_base_config.PrivWhitelist = RIF_CID_0 | RIF_CID_1 | RIF_CID_2 | RIF_CID_3 |
+                                    RIF_CID_4 | RIF_CID_5 | RIF_CID_6 | RIF_CID_7;
   risaf_base_config.StartAddress = 0x0000;
 
-  /* XSPI2 full range */
-  risaf_base_config.EndAddress = 0x07FFFFFF;
-  HAL_RIF_RISAF_ConfigBaseRegion(RISAF12, RISAF_REGION_1, &risaf_base_config);
-
-  /* CPUAXI RAM1 full range */
-  risaf_base_config.EndAddress = 0x000FFFFF;
-  HAL_RIF_RISAF_ConfigBaseRegion(RISAF3, RISAF_REGION_1, &risaf_base_config);
-
-  /* XSPI1 full range */
-  risaf_base_config.EndAddress = 0x01FFFFFF;
-  HAL_RIF_RISAF_ConfigBaseRegion(RISAF11, RISAF_REGION_1, &risaf_base_config);
-
-  /* CPUAXI RAM0 full range, including the camera frame buffer */
-  risaf_base_config.EndAddress = 0x001FFFFF;
+  /* CPUAXI RAM0 configured range from the .ioc is 0x34000000..0x3409BFFF.
+     This includes the camera frame buffer at 0x34082000. */
+  risaf_base_config.EndAddress = 0x0009BFFF;
   HAL_RIF_RISAF_ConfigBaseRegion(RISAF2, RISAF_REGION_1, &risaf_base_config);
-
-  /* FLEXRAM full range */
-  risaf_base_config.EndAddress = 0x00063FFF;
-  HAL_RIF_RISAF_ConfigBaseRegion(RISAF7, RISAF_REGION_1, &risaf_base_config);
 
   /* GPDMA1 channels 0..15 secure and privileged. */
   __HAL_RCC_GPDMA1_CLK_ENABLE();
@@ -208,17 +208,22 @@ int __io_putchar(int ch)
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
+ * @brief  This function is executed in case
+ * of error occurrence.
  * @retval None
  */
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
-  CameraDebug_PrintErrorContext();
-  __disable_irq();
   while (1)
   {
+    static const uint8_t error_banner[] = "\r\nERROR_HANDLER_ALIVE\r\n";
+    (void)HAL_UART_Transmit(&huart3,
+                            (uint8_t *)error_banner,
+                            (uint16_t)(sizeof(error_banner) - 1U),
+                            100U);
+    CameraPipeline_PrintErrorContext();
     HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
     for (volatile uint32_t i = 0U; i < 2000000U; i++)
     {

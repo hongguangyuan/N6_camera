@@ -7,6 +7,12 @@ import argparse
 import struct
 from pathlib import Path
 
+try:
+    from PIL import Image, ImageOps
+except ImportError:
+    Image = None
+    ImageOps = None
+
 
 def write_pgm8(path: Path, pixels: list[int], width: int, height: int) -> None:
     with path.open("wb") as f:
@@ -25,6 +31,42 @@ def write_raw10le(path: Path, pixels: list[int]) -> None:
     with path.open("wb") as f:
         for p in pixels:
             f.write(struct.pack("<H", p & 0x03FF))
+
+
+def write_png8_autocontrast(path: Path, pixels: list[int], width: int, height: int) -> bool:
+    if Image is None or ImageOps is None:
+        return False
+    image = Image.frombytes("L", (width, height), bytes((p >> 2) & 0xFF for p in pixels))
+    ImageOps.autocontrast(image).save(path)
+    return True
+
+
+def bayer_average_2x2(pixels: list[int], width: int, height: int) -> tuple[list[int], int, int]:
+    out_width = width // 2
+    out_height = height // 2
+    averaged: list[int] = []
+    for y in range(out_height):
+        row0 = (y * 2) * width
+        row1 = row0 + width
+        for x in range(out_width):
+            i = x * 2
+            total = (
+                pixels[row0 + i]
+                + pixels[row0 + i + 1]
+                + pixels[row1 + i]
+                + pixels[row1 + i + 1]
+            )
+            averaged.append((total + 2) // 4)
+    return averaged, out_width, out_height
+
+
+def crop_left_half(pixels: list[int], width: int, height: int) -> tuple[list[int], int, int]:
+    out_width = width // 2
+    cropped: list[int] = []
+    for y in range(height):
+        start = y * width
+        cropped.extend(pixels[start : start + out_width])
+    return cropped, out_width, height
 
 
 def write_pgm16(path: Path, pixels: list[int], width: int, height: int) -> None:
@@ -203,12 +245,31 @@ def main() -> int:
     pgm10 = prefix.with_name(prefix.name + "_10bit.pgm")
     pgm16 = prefix.with_name(prefix.name + "_raw16_16bit.pgm")
     raw10le = prefix.with_name(prefix.name + "_raw10le.bin")
+    avg_pixels, avg_width, avg_height = bayer_average_2x2(pixels, args.width, args.height)
+    avg_pgm8 = prefix.with_name(prefix.name + "_bayer2x2avg_8bit.pgm")
+    avg_pgm10 = prefix.with_name(prefix.name + "_bayer2x2avg_10bit.pgm")
+    png8 = prefix.with_name(prefix.name + "_raw10_autocontrast.png")
+    avg_png8 = prefix.with_name(prefix.name + "_bayer2x2avg_autocontrast.png")
+    left_pixels, left_width, left_height = crop_left_half(pixels, args.width, args.height)
+    left_pgm8 = prefix.with_name(prefix.name + "_left_half_8bit.pgm")
+    left_png8 = prefix.with_name(prefix.name + "_left_half_autocontrast.png")
+    left_avg_pixels, left_avg_width, left_avg_height = bayer_average_2x2(left_pixels, left_width, left_height)
+    left_avg_pgm8 = prefix.with_name(prefix.name + "_left_half_bayer2x2avg_8bit.pgm")
+    left_avg_png8 = prefix.with_name(prefix.name + "_left_half_bayer2x2avg_autocontrast.png")
     stats = prefix.with_name(prefix.name + "_stats.txt")
 
     write_pgm8(pgm8, pixels, args.width, args.height)
     write_pgm10(pgm10, pixels, args.width, args.height)
     write_pgm16(pgm16, raw16_pixels, args.width, args.height)
     write_raw10le(raw10le, pixels)
+    write_pgm8(avg_pgm8, avg_pixels, avg_width, avg_height)
+    write_pgm10(avg_pgm10, avg_pixels, avg_width, avg_height)
+    wrote_png8 = write_png8_autocontrast(png8, pixels, args.width, args.height)
+    wrote_avg_png8 = write_png8_autocontrast(avg_png8, avg_pixels, avg_width, avg_height)
+    write_pgm8(left_pgm8, left_pixels, left_width, left_height)
+    write_pgm8(left_avg_pgm8, left_avg_pixels, left_avg_width, left_avg_height)
+    wrote_left_png8 = write_png8_autocontrast(left_png8, left_pixels, left_width, left_height)
+    wrote_left_avg_png8 = write_png8_autocontrast(left_avg_png8, left_avg_pixels, left_avg_width, left_avg_height)
 
     lines = [
         f"input={args.input}",
@@ -234,6 +295,20 @@ def main() -> int:
         f"pgm10={pgm10}",
         f"pgm16={pgm16}",
         f"raw10le={raw10le}",
+        f"bayer2x2avg_width={avg_width}",
+        f"bayer2x2avg_height={avg_height}",
+        f"bayer2x2avg_pgm8={avg_pgm8}",
+        f"bayer2x2avg_pgm10={avg_pgm10}",
+        f"png8={png8 if wrote_png8 else 'not_written_pillow_missing'}",
+        f"bayer2x2avg_png8={avg_png8 if wrote_avg_png8 else 'not_written_pillow_missing'}",
+        f"left_half_width={left_width}",
+        f"left_half_height={left_height}",
+        f"left_half_pgm8={left_pgm8}",
+        f"left_half_png8={left_png8 if wrote_left_png8 else 'not_written_pillow_missing'}",
+        f"left_half_bayer2x2avg_width={left_avg_width}",
+        f"left_half_bayer2x2avg_height={left_avg_height}",
+        f"left_half_bayer2x2avg_pgm8={left_avg_pgm8}",
+        f"left_half_bayer2x2avg_png8={left_avg_png8 if wrote_left_avg_png8 else 'not_written_pillow_missing'}",
     ]
     stats.write_text("\n".join(lines) + "\n", encoding="ascii")
     print("\n".join(lines))

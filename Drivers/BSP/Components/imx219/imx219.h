@@ -29,6 +29,7 @@ extern "C" {
 #define IMX219_R1640_1232               (2U)
 #define IMX219_R640_480                 (3U)
 #define IMX219_R320_240                 (4U)
+#define IMX219_R1232_924                (5U)
 
 typedef struct
 {

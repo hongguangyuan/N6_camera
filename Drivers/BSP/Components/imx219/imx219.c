@@ -35,6 +35,8 @@
 #define IMX219_REG_ANALOG_GAIN          0x0157U
 #define IMX219_REG_DIGITAL_GAIN         0x0158U
 #define IMX219_REG_TEST_PATTERN         0x0600U
+#define IMX219_REG_TP_WINDOW_WIDTH      0x0624U
+#define IMX219_REG_TP_WINDOW_HEIGHT     0x0626U
 #define IMX219_REG_PLL_OP_MPY           0x030CU
 
 #define IMX219_REG_CHIP_ID              0x0000U
@@ -69,6 +71,7 @@ static const IMX219_Mode_t IMX219_Modes[] =
   { IMX219_R3280_2464, 3280U, 2464U, 3526U, 3448U, 1U },
   { IMX219_R1920_1080, 1920U, 1080U, 1763U, 3448U, 1U },
   { IMX219_R1640_1232, 1640U, 1232U, 1707U, 3560U, 2U },
+  { IMX219_R1232_924,  1232U,  924U, 1707U, 3560U, 2U },
   { IMX219_R640_480,    640U,  480U, 1707U, 3560U, 1U },
   { IMX219_R320_240,    320U,  240U, 1707U, 3560U, 2U },
 };
@@ -277,6 +280,20 @@ int32_t IMX219_SetTestPattern(IMX219_Object_t *pObj, uint8_t Mode)
   if (pObj == NULL)
   {
     return IMX219_ERROR;
+  }
+
+  if (Mode != 0U)
+  {
+    if ((pObj->Width == 0U) || (pObj->Height == 0U))
+    {
+      return IMX219_ERROR;
+    }
+
+    if ((IMX219_WriteReg16(pObj, IMX219_REG_TP_WINDOW_WIDTH, (uint16_t)pObj->Width) != IMX219_OK) ||
+        (IMX219_WriteReg16(pObj, IMX219_REG_TP_WINDOW_HEIGHT, (uint16_t)pObj->Height) != IMX219_OK))
+    {
+      return IMX219_ERROR;
+    }
   }
 
   return IMX219_WriteReg16(pObj, IMX219_REG_TEST_PATTERN, (uint16_t)Mode);
