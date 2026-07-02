@@ -121,6 +121,8 @@ extern "C" {
   (CAMERA_PIPELINE_OUTPUT_PITCH_BYTES * CAMERA_PIPELINE_OUTPUT_HEIGHT)
 #define CAMERA_PIPELINE_RGB565_FRAME_BYTES CAMERA_PIPELINE_FRAME_BYTES
 
+#define CAMERA_PIPELINE_WB_GAIN_1X 100000000U
+
 typedef enum
 {
   CAMERA_PIPELINE_STATE_RESET = 0,
@@ -139,11 +141,25 @@ typedef struct
   uint32_t frame_count;
 } CameraPipeline_Status_t;
 
+typedef struct
+{
+  uint16_t exposure_lines;
+  uint8_t analog_gain;
+  uint16_t digital_gain;
+  uint32_t wb_red_gain;
+  uint32_t wb_green_gain;
+  uint32_t wb_blue_gain;
+  uint8_t gamma_enable;
+} CameraPipeline_ImageControl_t;
+
 HAL_StatusTypeDef CameraPipeline_InitAndStart(I2C_HandleTypeDef *hi2c);
 void CameraPipeline_Task(void);
 void CameraPipeline_GetStatus(CameraPipeline_Status_t *status);
 uint8_t *CameraPipeline_GetFrameBuffer(void);
 uint32_t CameraPipeline_GetFrameBufferSize(void);
+void CameraPipeline_GetDefaultImageControl(CameraPipeline_ImageControl_t *control);
+void CameraPipeline_GetImageControl(CameraPipeline_ImageControl_t *control);
+HAL_StatusTypeDef CameraPipeline_ApplyImageControl(const CameraPipeline_ImageControl_t *control);
 void CameraPipeline_PrintPortingNotes(void);
 void CameraPipeline_PrintErrorContext(void);
 

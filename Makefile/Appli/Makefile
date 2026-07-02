@@ -38,7 +38,7 @@ BUILD_DIR = build
 C_SOURCES =  \
 ../../Appli/Core/Src/main.c \
 ../../Appli/Core/Src/gpio.c \
-../../Appli/Core/Src/camera_bringup.c \
+../../Appli/Core/Src/camera_driver.c \
 ../../Appli/Core/Src/camera_pipeline.c \
 ../../Appli/Core/Src/csi.c \
 ../../Appli/Core/Src/i2c.c \

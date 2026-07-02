@@ -84,9 +84,9 @@
 #endif
 #define CAMERA_PIPELINE_LINE_LENGTH 20000U
 #define CAMERA_PIPELINE_FRAME_LENGTH 3000U
-#define CAMERA_PIPELINE_FIXED_ANALOG_GAIN 0x80U
-#define CAMERA_PIPELINE_FIXED_EXPOSURE_LINES 0x012CU
-#define CAMERA_PIPELINE_FIXED_DIGITAL_GAIN 0x0100U
+#define CAMERA_PIPELINE_DEFAULT_ANALOG_GAIN 0x80U
+#define CAMERA_PIPELINE_DEFAULT_EXPOSURE_LINES 0x01F4U
+#define CAMERA_PIPELINE_DEFAULT_DIGITAL_GAIN 0x0100U
 #define CAMERA_PIPELINE_USE_LOW_LINK 1U
 #define CAMERA_PIPELINE_LOW_LINK_OP_PLL_MULT 0x0039U
 #define CAMERA_PIPELINE_UART_DUMP_AFTER_FREEZE 1U
@@ -111,10 +111,11 @@
 #define CAMERA_PIPELINE_PIPE1_BAYER DCMIPP_RAWBAYER_RGGB
 #define CAMERA_PIPELINE_PIPE1_BAYER_STRENGTH DCMIPP_RAWBAYER_ALGO_STRENGTH_8
 #define CAMERA_PIPELINE_PIPE1_ENABLE_WB_EXPOSURE 1U
-#define CAMERA_PIPELINE_PIPE1_GAIN_1X 100000000U
+#define CAMERA_PIPELINE_PIPE1_GAIN_1X CAMERA_PIPELINE_WB_GAIN_1X
 #define CAMERA_PIPELINE_PIPE1_WB_R_GAIN 137500000U
 #define CAMERA_PIPELINE_PIPE1_WB_G_GAIN CAMERA_PIPELINE_PIPE1_GAIN_1X
 #define CAMERA_PIPELINE_PIPE1_WB_B_GAIN 125000000U
+#define CAMERA_PIPELINE_DEFAULT_GAMMA_ENABLE 0U
 #define CAMERA_PIPELINE_MASK_DPHY_IRQ 1U
 #define CAMERA_PIPELINE_CSI_DPHY_DATA_LANE_ERROR_IT                                      \
   (DCMIPP_CSI_IT_ECTRLDL1 | DCMIPP_CSI_IT_ESYNCESCDL1 | DCMIPP_CSI_IT_EESCDL1 |          \
@@ -216,6 +217,24 @@ static IMX219_Object_t hcamera_pipeline;
 static ISP_HandleTypeDef hcamera_isp;
 #endif
 static CameraPipeline_Status_t pipeline_status = { CAMERA_PIPELINE_STATE_RESET, 0U, 0U, 0U };
+static const CameraPipeline_ImageControl_t pipeline_default_image_control = {
+  CAMERA_PIPELINE_DEFAULT_EXPOSURE_LINES,
+  CAMERA_PIPELINE_DEFAULT_ANALOG_GAIN,
+  CAMERA_PIPELINE_DEFAULT_DIGITAL_GAIN,
+  CAMERA_PIPELINE_PIPE1_WB_R_GAIN,
+  CAMERA_PIPELINE_PIPE1_WB_G_GAIN,
+  CAMERA_PIPELINE_PIPE1_WB_B_GAIN,
+  CAMERA_PIPELINE_DEFAULT_GAMMA_ENABLE
+};
+static CameraPipeline_ImageControl_t pipeline_image_control = {
+  CAMERA_PIPELINE_DEFAULT_EXPOSURE_LINES,
+  CAMERA_PIPELINE_DEFAULT_ANALOG_GAIN,
+  CAMERA_PIPELINE_DEFAULT_DIGITAL_GAIN,
+  CAMERA_PIPELINE_PIPE1_WB_R_GAIN,
+  CAMERA_PIPELINE_PIPE1_WB_G_GAIN,
+  CAMERA_PIPELINE_PIPE1_WB_B_GAIN,
+  CAMERA_PIPELINE_DEFAULT_GAMMA_ENABLE
+};
 #if ((CAMERA_PIPELINE_MANUAL_BRIGHTNESS_VERIFY != 0U) && \
      (CAMERA_PIPELINE_ENABLE_SENSOR_TEST_PATTERN == 0U))
 static int32_t isp_gain = CAMERA_PIPELINE_MANUAL_GAIN_MDB;
@@ -248,6 +267,9 @@ static volatile uint32_t pipeline_csi_lb_count[4];
 static HAL_StatusTypeDef CameraPipeline_BringUpSensor(I2C_HandleTypeDef *hi2c);
 static HAL_StatusTypeDef CameraPipeline_DCMIPP_Init(void);
 static HAL_StatusTypeDef CameraPipeline_StartCaptureCycle(void);
+static HAL_StatusTypeDef CameraPipeline_ValidateImageControl(const CameraPipeline_ImageControl_t *control);
+static HAL_StatusTypeDef CameraPipeline_ApplySensorImageControl(const CameraPipeline_ImageControl_t *control);
+static HAL_StatusTypeDef CameraPipeline_ApplyPipe1ImageControl(const CameraPipeline_ImageControl_t *control);
 #if (CAMERA_PIPELINE_USE_ISP_RUNTIME != 0U)
 static ISP_StatusTypeDef GetSensorInfoHelper(uint32_t Instance, ISP_SensorInfoTypeDef *SensorInfo);
 static ISP_StatusTypeDef SetSensorGainHelper(uint32_t Instance, int32_t Gain);
@@ -663,6 +685,53 @@ uint32_t CameraPipeline_GetFrameBufferSize(void)
   return CAMERA_PIPELINE_FRAME_BYTES;
 }
 
+void CameraPipeline_GetDefaultImageControl(CameraPipeline_ImageControl_t *control)
+{
+  if (control != NULL)
+  {
+    *control = pipeline_default_image_control;
+  }
+}
+
+void CameraPipeline_GetImageControl(CameraPipeline_ImageControl_t *control)
+{
+  if (control != NULL)
+  {
+    *control = pipeline_image_control;
+  }
+}
+
+HAL_StatusTypeDef CameraPipeline_ApplyImageControl(const CameraPipeline_ImageControl_t *control)
+{
+  if (CameraPipeline_ValidateImageControl(control) != HAL_OK)
+  {
+    pipeline_status.last_error = 200U;
+    return HAL_ERROR;
+  }
+
+  pipeline_image_control = *control;
+
+  if ((pipeline_status.state == CAMERA_PIPELINE_STATE_RESET) ||
+      (pipeline_status.state == CAMERA_PIPELINE_STATE_SCAFFOLD_READY))
+  {
+    return HAL_OK;
+  }
+
+  if (CameraPipeline_ApplySensorImageControl(&pipeline_image_control) != HAL_OK)
+  {
+    pipeline_status.last_error = 201U;
+    return HAL_ERROR;
+  }
+
+  if (CameraPipeline_ApplyPipe1ImageControl(&pipeline_image_control) != HAL_OK)
+  {
+    pipeline_status.last_error = 202U;
+    return HAL_ERROR;
+  }
+
+  return HAL_OK;
+}
+
 void CameraPipeline_PrintPortingNotes(void)
 {
 #if (CAMERA_PIPELINE_USE_ISP_RUNTIME != 0U)
@@ -680,6 +749,112 @@ void CameraPipeline_PrintErrorContext(void)
          (uint32_t)pipeline_status.last_error,
          (uint32_t)pipeline_status.frame_count,
          (uint32_t)DCMIPP->P1SR);
+}
+
+static HAL_StatusTypeDef CameraPipeline_ValidateImageControl(const CameraPipeline_ImageControl_t *control)
+{
+  if (control == NULL)
+  {
+    return HAL_ERROR;
+  }
+
+  if ((control->exposure_lines == 0U) ||
+      (control->exposure_lines > (CAMERA_PIPELINE_FRAME_LENGTH - 4U)) ||
+      (control->digital_gain == 0U) ||
+      (control->wb_red_gain == 0U) ||
+      (control->wb_green_gain == 0U) ||
+      (control->wb_blue_gain == 0U))
+  {
+    return HAL_ERROR;
+  }
+
+  return HAL_OK;
+}
+
+static HAL_StatusTypeDef CameraPipeline_ApplySensorImageControl(const CameraPipeline_ImageControl_t *control)
+{
+  if (CameraPipeline_ValidateImageControl(control) != HAL_OK)
+  {
+    return HAL_ERROR;
+  }
+
+  if (IMX219_SetExposureGain(&hcamera_pipeline,
+                             control->exposure_lines,
+                             control->analog_gain,
+                             control->digital_gain) != IMX219_OK)
+  {
+    return HAL_ERROR;
+  }
+
+  printf("IMX219 image control: exposure_lines=0x%04lX analog=0x%02lX digital=0x%04lX\r\n",
+         (uint32_t)control->exposure_lines,
+         (uint32_t)control->analog_gain,
+         (uint32_t)control->digital_gain);
+  return HAL_OK;
+}
+
+static HAL_StatusTypeDef CameraPipeline_ApplyPipe1ImageControl(const CameraPipeline_ImageControl_t *control)
+{
+#if ((CAMERA_PIPELINE_USE_ISP_RUNTIME == 0U) && \
+     (CAMERA_PIPELINE_RAW_GRAY_DEBUG == 0U) && \
+     (CAMERA_PIPELINE_PIPE0_DEBUG == 0U))
+  DCMIPP_ExposureConfTypeDef exposure_conf = {0};
+
+  if (CameraPipeline_ValidateImageControl(control) != HAL_OK)
+  {
+    return HAL_ERROR;
+  }
+
+#if (CAMERA_PIPELINE_PIPE1_ENABLE_WB_EXPOSURE != 0U)
+  CameraPipeline_ToExposureShiftMultiplier(control->wb_red_gain,
+                                           &exposure_conf.ShiftRed,
+                                           &exposure_conf.MultiplierRed);
+  CameraPipeline_ToExposureShiftMultiplier(control->wb_green_gain,
+                                           &exposure_conf.ShiftGreen,
+                                           &exposure_conf.MultiplierGreen);
+  CameraPipeline_ToExposureShiftMultiplier(control->wb_blue_gain,
+                                           &exposure_conf.ShiftBlue,
+                                           &exposure_conf.MultiplierBlue);
+  if (HAL_DCMIPP_PIPE_SetISPExposureConfig(&hdcmipp, DCMIPP_PIPE1, &exposure_conf) != HAL_OK)
+  {
+    return HAL_ERROR;
+  }
+  if (HAL_DCMIPP_PIPE_EnableISPExposure(&hdcmipp, DCMIPP_PIPE1) != HAL_OK)
+  {
+    return HAL_ERROR;
+  }
+  printf("DCMIPP PIPE1 WB: gain_r/g/b=%lu/%lu/%lu shift_r/g/b=%lu/%lu/%lu mult_r/g/b=%lu/%lu/%lu\r\n",
+         (uint32_t)control->wb_red_gain,
+         (uint32_t)control->wb_green_gain,
+         (uint32_t)control->wb_blue_gain,
+         (uint32_t)exposure_conf.ShiftRed,
+         (uint32_t)exposure_conf.ShiftGreen,
+         (uint32_t)exposure_conf.ShiftBlue,
+         (uint32_t)exposure_conf.MultiplierRed,
+         (uint32_t)exposure_conf.MultiplierGreen,
+         (uint32_t)exposure_conf.MultiplierBlue);
+#endif
+
+  if (control->gamma_enable != 0U)
+  {
+    if (HAL_DCMIPP_PIPE_EnableGammaConversion(&hdcmipp, DCMIPP_PIPE1) != HAL_OK)
+    {
+      return HAL_ERROR;
+    }
+  }
+  else
+  {
+    if (HAL_DCMIPP_PIPE_DisableGammaConversion(&hdcmipp, DCMIPP_PIPE1) != HAL_OK)
+    {
+      return HAL_ERROR;
+    }
+  }
+  printf("DCMIPP PIPE1 gamma: %s\r\n", (control->gamma_enable != 0U) ? "ON" : "OFF");
+#else
+  (void)control;
+#endif
+
+  return HAL_OK;
 }
 
 static HAL_StatusTypeDef CameraPipeline_StartCaptureCycle(void)
@@ -758,7 +933,7 @@ static HAL_StatusTypeDef CameraPipeline_StartCaptureCycle(void)
     if (IMX219_SetExposureGain(&hcamera_pipeline,
                                CameraPipeline_ExposureUsToLines(isp_exposure),
                                CameraPipeline_GainMdBToAnalogReg(isp_gain),
-                               CAMERA_PIPELINE_FIXED_DIGITAL_GAIN) != IMX219_OK)
+                               CAMERA_PIPELINE_DEFAULT_DIGITAL_GAIN) != IMX219_OK)
     {
       pipeline_status.last_error = 56U;
       printf("IMX219 manual brightness set failed after ISP_Start\r\n");
@@ -821,9 +996,6 @@ static HAL_StatusTypeDef CameraPipeline_DCMIPP_Init(void)
 #endif
 #if ((CAMERA_PIPELINE_USE_ISP_RUNTIME == 0U) && (CAMERA_PIPELINE_RAW_GRAY_DEBUG == 0U))
   DCMIPP_RawBayer2RGBConfTypeDef raw_bayer_conf = {0};
-#if (CAMERA_PIPELINE_PIPE1_ENABLE_WB_EXPOSURE != 0U)
-  DCMIPP_ExposureConfTypeDef exposure_conf = {0};
-#endif
 #endif
 #if ((CAMERA_PIPELINE_PIPE1_RAWBAYER_ONLY_DEBUG == 0U) && \
      (CAMERA_PIPELINE_PIPE1_GRAY_DECIM_ONLY_DEBUG == 0U) && \
@@ -1043,37 +1215,11 @@ static HAL_StatusTypeDef CameraPipeline_DCMIPP_Init(void)
   raw_bayer_conf.EdgeStrength = CAMERA_PIPELINE_PIPE1_BAYER_STRENGTH;
   raw_bayer_conf.VLineStrength = CAMERA_PIPELINE_PIPE1_BAYER_STRENGTH;
   raw_bayer_conf.HLineStrength = CAMERA_PIPELINE_PIPE1_BAYER_STRENGTH;
-#if (CAMERA_PIPELINE_PIPE1_ENABLE_WB_EXPOSURE != 0U)
-  CameraPipeline_ToExposureShiftMultiplier(CAMERA_PIPELINE_PIPE1_WB_R_GAIN,
-                                           &exposure_conf.ShiftRed,
-                                           &exposure_conf.MultiplierRed);
-  CameraPipeline_ToExposureShiftMultiplier(CAMERA_PIPELINE_PIPE1_WB_G_GAIN,
-                                           &exposure_conf.ShiftGreen,
-                                           &exposure_conf.MultiplierGreen);
-  CameraPipeline_ToExposureShiftMultiplier(CAMERA_PIPELINE_PIPE1_WB_B_GAIN,
-                                           &exposure_conf.ShiftBlue,
-                                           &exposure_conf.MultiplierBlue);
-  if (HAL_DCMIPP_PIPE_SetISPExposureConfig(&hdcmipp, DCMIPP_PIPE1, &exposure_conf) != HAL_OK)
+  if (CameraPipeline_ApplyPipe1ImageControl(&pipeline_image_control) != HAL_OK)
   {
     pipeline_status.last_error = 155U;
     return HAL_ERROR;
   }
-  if (HAL_DCMIPP_PIPE_EnableISPExposure(&hdcmipp, DCMIPP_PIPE1) != HAL_OK)
-  {
-    pipeline_status.last_error = 156U;
-    return HAL_ERROR;
-  }
-  printf("DCMIPP PIPE1 WB exposure: gain_r/g/b=%lu/%lu/%lu shift_r/g/b=%lu/%lu/%lu mult_r/g/b=%lu/%lu/%lu\r\n",
-         (uint32_t)CAMERA_PIPELINE_PIPE1_WB_R_GAIN,
-         (uint32_t)CAMERA_PIPELINE_PIPE1_WB_G_GAIN,
-         (uint32_t)CAMERA_PIPELINE_PIPE1_WB_B_GAIN,
-         (uint32_t)exposure_conf.ShiftRed,
-         (uint32_t)exposure_conf.ShiftGreen,
-         (uint32_t)exposure_conf.ShiftBlue,
-         (uint32_t)exposure_conf.MultiplierRed,
-         (uint32_t)exposure_conf.MultiplierGreen,
-         (uint32_t)exposure_conf.MultiplierBlue);
-#endif
   if (HAL_DCMIPP_PIPE_SetISPRawBayer2RGBConfig(&hdcmipp, DCMIPP_PIPE1, &raw_bayer_conf) != HAL_OK)
   {
     pipeline_status.last_error = 146U;
@@ -1236,10 +1382,7 @@ static HAL_StatusTypeDef CameraPipeline_BringUpSensor(I2C_HandleTypeDef *hi2c)
     return HAL_ERROR;
   }
 
-  if (IMX219_SetExposureGain(&hcamera_pipeline,
-                             CAMERA_PIPELINE_FIXED_EXPOSURE_LINES,
-                             CAMERA_PIPELINE_FIXED_ANALOG_GAIN,
-                             CAMERA_PIPELINE_FIXED_DIGITAL_GAIN) != IMX219_OK)
+  if (CameraPipeline_ApplySensorImageControl(&pipeline_image_control) != HAL_OK)
   {
     pipeline_status.last_error = 9U;
     return HAL_ERROR;
@@ -1284,6 +1427,7 @@ static HAL_StatusTypeDef CameraPipeline_BringUpSensor(I2C_HandleTypeDef *hi2c)
          (uint32_t)id,
          (uint32_t)CAMERA_PIPELINE_INPUT_WIDTH,
          (uint32_t)CAMERA_PIPELINE_INPUT_HEIGHT);
+  pipeline_status.state = CAMERA_PIPELINE_STATE_SENSOR_READY;
   return HAL_OK;
 }
 
@@ -1332,7 +1476,7 @@ static ISP_StatusTypeDef SetSensorGainHelper(uint32_t Instance, int32_t Gain)
   if (IMX219_SetExposureGain(&hcamera_pipeline,
                              CameraPipeline_ExposureUsToLines(isp_exposure),
                              CameraPipeline_GainMdBToAnalogReg(isp_gain),
-                             CAMERA_PIPELINE_FIXED_DIGITAL_GAIN) != IMX219_OK)
+                             CAMERA_PIPELINE_DEFAULT_DIGITAL_GAIN) != IMX219_OK)
   {
     return ISP_ERR_SENSORGAIN;
   }
@@ -1342,7 +1486,7 @@ static ISP_StatusTypeDef SetSensorGainHelper(uint32_t Instance, int32_t Gain)
   if (IMX219_SetExposureGain(&hcamera_pipeline,
                              CameraPipeline_ExposureUsToLines(isp_exposure),
                              CameraPipeline_GainMdBToAnalogReg(Gain),
-                             CAMERA_PIPELINE_FIXED_DIGITAL_GAIN) != IMX219_OK)
+                             CAMERA_PIPELINE_DEFAULT_DIGITAL_GAIN) != IMX219_OK)
   {
     return ISP_ERR_SENSORGAIN;
   }
@@ -1374,7 +1518,7 @@ static ISP_StatusTypeDef SetSensorExposureHelper(uint32_t Instance, int32_t Expo
   if (IMX219_SetExposureGain(&hcamera_pipeline,
                              CameraPipeline_ExposureUsToLines(isp_exposure),
                              CameraPipeline_GainMdBToAnalogReg(isp_gain),
-                             CAMERA_PIPELINE_FIXED_DIGITAL_GAIN) != IMX219_OK)
+                             CAMERA_PIPELINE_DEFAULT_DIGITAL_GAIN) != IMX219_OK)
   {
     return ISP_ERR_SENSOREXPOSURE;
   }
@@ -1384,7 +1528,7 @@ static ISP_StatusTypeDef SetSensorExposureHelper(uint32_t Instance, int32_t Expo
   if (IMX219_SetExposureGain(&hcamera_pipeline,
                              CameraPipeline_ExposureUsToLines(Exposure),
                              CameraPipeline_GainMdBToAnalogReg(isp_gain),
-                             CAMERA_PIPELINE_FIXED_DIGITAL_GAIN) != IMX219_OK)
+                             CAMERA_PIPELINE_DEFAULT_DIGITAL_GAIN) != IMX219_OK)
   {
     return ISP_ERR_SENSOREXPOSURE;
   }
@@ -1438,7 +1582,7 @@ static uint16_t CameraPipeline_ExposureUsToLines(int32_t ExposureUs)
 
   if (ExposureUs <= 0)
   {
-    return CAMERA_PIPELINE_FIXED_EXPOSURE_LINES;
+    return CAMERA_PIPELINE_DEFAULT_EXPOSURE_LINES;
   }
 
   lines = ((uint32_t)ExposureUs * 1000U) / CAMERA_PIPELINE_LINE_TIME_NS;
@@ -1796,10 +1940,14 @@ static void CameraPipeline_ToExposureShiftMultiplier(uint32_t gain, uint8_t *shi
   val = (val * 128ULL) / CAMERA_PIPELINE_PIPE1_GAIN_1X;
 
   *shift = 0U;
-  while (val >= 256ULL)
+  while ((val >= 256ULL) && (*shift < 7U))
   {
     val /= 2ULL;
     (*shift)++;
+  }
+  if (val > 255ULL)
+  {
+    val = 255ULL;
   }
 
   *multiplier = (uint8_t)val;

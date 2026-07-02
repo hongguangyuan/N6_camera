@@ -25,7 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "camera_pipeline.h"
+#include "camera_driver.h"
 #include <stdio.h>
 /* USER CODE END Includes */
 
@@ -90,7 +90,7 @@ int main(void)
   printf("SystemIsolation: risaf=%lu dapcid=0x%08lX\r\n",
          (uint32_t)CAMERA_DEBUG_CONFIG_RISAF,
          (uint32_t)HAL_RIF_RIMC_GetDebugAccessPortCID());
-  if (CameraPipeline_InitAndStart(&hi2c1) != HAL_OK)
+  if (CameraDriver_InitAndStart(&hi2c1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -104,7 +104,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    CameraPipeline_Task();
+    CameraDriver_Task();
   }
   /* USER CODE END 3 */
 }
@@ -223,7 +223,7 @@ void Error_Handler(void)
                             (uint8_t *)error_banner,
                             (uint16_t)(sizeof(error_banner) - 1U),
                             100U);
-    CameraPipeline_PrintErrorContext();
+    CameraDriver_PrintErrorContext();
     HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
     for (volatile uint32_t i = 0U; i < 2000000U; i++)
     {
