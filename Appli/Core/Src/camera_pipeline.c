@@ -8,14 +8,24 @@
 #include <stdio.h>
 #include <string.h>
 
+#if (CAMERA_PIPELINE_SENSOR_640X480_DEBUG != 0U)
+#define CAMERA_PIPELINE_SENSOR_RESOLUTION IMX219_R640_480
+#else
 #define CAMERA_PIPELINE_SENSOR_RESOLUTION IMX219_R1640_1232
+#endif
 #define CAMERA_PIPELINE_PIXEL_FORMAT IMX219_RAW10
 #define CAMERA_PIPELINE_LANE_COUNT 2U
 #define CAMERA_PIPELINE_BUFFER_ADDRESS 0x34082000U
 #define CAMERA_PIPELINE_BUFFER_BYTES (1024U * 1024U)
-#define CAMERA_PIPELINE_PITCH_BYTES CAMERA_PIPELINE_OUTPUT_PITCH_BYTES
+#define CAMERA_PIPELINE_CAPTURE_PITCH_BYTES CAMERA_PIPELINE_PIPE0_RAW_CAPTURE_PITCH_BYTES
+#define CAMERA_PIPELINE_PIPE_CONFIG_PITCH_BYTES CAMERA_PIPELINE_PIPE0_RAW_PIPE_CONFIG_PITCH_BYTES
+#define CAMERA_PIPELINE_CAPTURE_FRAME_BYTES CAMERA_PIPELINE_PIPE0_RAW_CAPTURE_FRAME_BYTES
 #define CAMERA_PIPELINE_RAW10_LINE_BYTES ((CAMERA_PIPELINE_INPUT_WIDTH * 10U) / 8U)
 #define CAMERA_PIPELINE_CSI_LINE_BYTE_PROBE 1U
+#define CAMERA_PIPELINE_CSI_PROBE_LINE0 1U
+#define CAMERA_PIPELINE_CSI_PROBE_LINE1 (CAMERA_PIPELINE_INPUT_HEIGHT / 4U)
+#define CAMERA_PIPELINE_CSI_PROBE_LINE2 (CAMERA_PIPELINE_INPUT_HEIGHT / 2U)
+#define CAMERA_PIPELINE_CSI_PROBE_LINE3 CAMERA_PIPELINE_INPUT_HEIGHT
 #define CAMERA_PIPELINE_PIPE1_FORCE_RAW10_FORMAT 1U
 #define CAMERA_PIPELINE_PIPE1_EFFECTIVE_SOURCE_WIDTH CAMERA_PIPELINE_BAYER2RGB_OUTPUT_WIDTH
 #define CAMERA_PIPELINE_PIPE1_EFFECTIVE_SOURCE_HEIGHT CAMERA_PIPELINE_BAYER2RGB_OUTPUT_HEIGHT
@@ -26,7 +36,8 @@
 #define CAMERA_PIPELINE_MANUAL_BRIGHTNESS_VERIFY 1U
 #define CAMERA_PIPELINE_MANUAL_EXPOSURE_US 20000
 #define CAMERA_PIPELINE_MANUAL_GAIN_MDB 18000
-#define CAMERA_PIPELINE_LINE_TIME_NS_DEFAULT 33367U
+#define CAMERA_PIPELINE_BASE_LINE_LENGTH 3560U
+#define CAMERA_PIPELINE_BASE_LINE_TIME_NS_DEFAULT 19528U
 #if ((CAMERA_PIPELINE_PIPE0_RAW16_DEBUG != 0U) || (CAMERA_PIPELINE_PIPE0_RAW10P_DEBUG != 0U))
 #define CAMERA_PIPELINE_PIPE0_DEBUG 1U
 #else
@@ -63,7 +74,7 @@
 #define CAMERA_PIPELINE_DOWNSIZE_SOURCE_HEIGHT (CAMERA_PIPELINE_INPUT_HEIGHT / 2U)
 #endif
 #define CAMERA_PIPELINE_RGB565_SNAPSHOT_VERIFY 1U
-#define CAMERA_PIPELINE_CONTINUOUS_FREEZE_PROBE 1U
+#define CAMERA_PIPELINE_CONTINUOUS_FREEZE_PROBE 0U
 #define CAMERA_PIPELINE_FREEZE_MIN_WAIT_MS 120U
 #define CAMERA_PIPELINE_FREEZE_TIMEOUT_MS 5000U
 #define CAMERA_PIPELINE_TAIL_READY_LINES 16U
@@ -82,18 +93,25 @@
 #else
 #define CAMERA_PIPELINE_FREEZE_AFTER_FRAMES 3U
 #endif
-#define CAMERA_PIPELINE_LINE_LENGTH 20000U
-#define CAMERA_PIPELINE_FRAME_LENGTH 3000U
+#define CAMERA_PIPELINE_LINE_LENGTH 3560U
+#define CAMERA_PIPELINE_FRAME_LENGTH 2134U
+#define CAMERA_PIPELINE_LINE_TIME_NS_DEFAULT \
+  (((CAMERA_PIPELINE_BASE_LINE_TIME_NS_DEFAULT * CAMERA_PIPELINE_LINE_LENGTH) + \
+    (CAMERA_PIPELINE_BASE_LINE_LENGTH / 2U)) / CAMERA_PIPELINE_BASE_LINE_LENGTH)
 #define CAMERA_PIPELINE_DEFAULT_ANALOG_GAIN 0x80U
 #define CAMERA_PIPELINE_DEFAULT_EXPOSURE_LINES 0x01F4U
 #define CAMERA_PIPELINE_DEFAULT_DIGITAL_GAIN 0x0100U
-#define CAMERA_PIPELINE_USE_LOW_LINK 1U
+#define CAMERA_PIPELINE_PIPE0_SW_RGB_BLACK_PERCENTILE 1U
+#define CAMERA_PIPELINE_PIPE0_SW_RGB_WHITE_PERCENTILE 99U
+#define CAMERA_PIPELINE_USE_LOW_LINK 0U
 #define CAMERA_PIPELINE_LOW_LINK_OP_PLL_MULT 0x0039U
 #define CAMERA_PIPELINE_UART_DUMP_AFTER_FREEZE 1U
 #define CAMERA_PIPELINE_UART_DUMP_BYTES_PER_LINE 64U
 #if ((CAMERA_PIPELINE_PIPE0_DEBUG != 0U) || \
      (CAMERA_PIPELINE_PIPE1_RAWBAYER_ONLY_DEBUG != 0U) || \
-     (CAMERA_PIPELINE_PIPE1_DOWNSIZE_820X320_TO_640X240_DEBUG != 0U))
+     (CAMERA_PIPELINE_PIPE1_DOWNSIZE_820X320_TO_640X240_DEBUG != 0U) || \
+     (CAMERA_PIPELINE_PIPE1_GRAY_DECIM_ONLY_DEBUG != 0U) || \
+     (CAMERA_PIPELINE_PIPE1_GRAY_CROP_ONLY_DEBUG != 0U))
 #define CAMERA_PIPELINE_UART_DUMP_REPEAT_COUNT 1U
 #else
 #define CAMERA_PIPELINE_UART_DUMP_REPEAT_COUNT 3U
@@ -152,7 +170,10 @@
 #define CAMERA_PIPELINE_IMX219_REG_TP_WINDOW_WIDTH 0x0624U
 #define CAMERA_PIPELINE_IMX219_REG_TP_WINDOW_HEIGHT 0x0626U
 #define CAMERA_PIPELINE_FRAME_WORDS ((CAMERA_PIPELINE_FRAME_BYTES + 3U) / 4U)
-#if (CAMERA_PIPELINE_PIPE0_DEBUG != 0U)
+#if ((CAMERA_PIPELINE_PIPE0_RAW16_DEBUG != 0U) && (CAMERA_PIPELINE_PIPE0_SW_RGB565_DEBUG != 0U))
+#define CAMERA_PIPELINE_DCC_DONE_BYTES \
+  (CAMERA_PIPELINE_PIPE0_RAW_CAPTURE_LINE_BYTES * CAMERA_PIPELINE_PIPE0_RAW_CAPTURE_HEIGHT)
+#elif (CAMERA_PIPELINE_PIPE0_DEBUG != 0U)
 #define CAMERA_PIPELINE_DCC_DONE_BYTES (CAMERA_PIPELINE_OUTPUT_LINE_BYTES * CAMERA_PIPELINE_OUTPUT_HEIGHT)
 #else
 #define CAMERA_PIPELINE_DCC_DONE_BYTES CAMERA_PIPELINE_FRAME_BYTES
@@ -165,12 +186,22 @@
 #define CAMERA_PIPELINE_PIPE0_CROP_HSTART 0U
 #define CAMERA_PIPELINE_PIPE0_CROP_VSTART 0U
 #endif
+#if ((CAMERA_PIPELINE_PIPE0_RAW16_DEBUG != 0U) && (CAMERA_PIPELINE_PIPE0_SW_RGB565_DEBUG != 0U))
+#define CAMERA_PIPELINE_PIPE0_CROP_HSIZE CAMERA_PIPELINE_PIPE0_RAW_CAPTURE_WIDTH
+#define CAMERA_PIPELINE_PIPE0_CROP_VSIZE CAMERA_PIPELINE_INPUT_HEIGHT
+#else
 #define CAMERA_PIPELINE_PIPE0_CROP_HSIZE CAMERA_PIPELINE_OUTPUT_WIDTH
+#define CAMERA_PIPELINE_PIPE0_CROP_VSIZE CAMERA_PIPELINE_OUTPUT_HEIGHT
+#endif
 
 #if (CAMERA_PIPELINE_PIPE0_DEBUG != 0U)
 #define CAMERA_PIPELINE_CAPTURE_PIPE DCMIPP_PIPE0
 #define CAMERA_PIPELINE_CAPTURE_MODE DCMIPP_MODE_CONTINUOUS
-#if (CAMERA_PIPELINE_PIPE0_RAW10P_DEBUG != 0U)
+#if (CAMERA_PIPELINE_PIPE0_SW_RGB565_DEBUG != 0U)
+#define CAMERA_PIPELINE_UART_BEGIN_TAG "RGB565_UART_DUMP_BEGIN"
+#define CAMERA_PIPELINE_UART_DATA_TAG "RGB565_UART_DUMP_DATA"
+#define CAMERA_PIPELINE_UART_END_TAG "RGB565_UART_DUMP_END"
+#elif (CAMERA_PIPELINE_PIPE0_RAW10P_DEBUG != 0U)
 #define CAMERA_PIPELINE_UART_BEGIN_TAG "RAW10P_UART_DUMP_BEGIN"
 #define CAMERA_PIPELINE_UART_DATA_TAG "RAW10P_UART_DUMP_DATA"
 #define CAMERA_PIPELINE_UART_END_TAG "RAW10P_UART_DUMP_END"
@@ -254,6 +285,9 @@ static uint32_t pipeline_uart_next_dump_tick;
 static uint32_t pipeline_next_capture_tick;
 static uint32_t pipeline_capture_cycle;
 static uint32_t pipeline_sensor_streaming;
+#if ((CAMERA_PIPELINE_PIPE0_RAW16_DEBUG != 0U) && (CAMERA_PIPELINE_PIPE0_SW_RGB565_DEBUG != 0U))
+static uint32_t pipeline_pipe0_sw_rgb_done;
+#endif
 #if (CAMERA_PIPELINE_ISP_WARMUP_ENABLE != 0U)
 static uint32_t pipeline_probe_warmup_done;
 #endif
@@ -287,8 +321,17 @@ static void CameraPipeline_PrintCsiRegs(const char *tag);
 static void CameraPipeline_PrintImx219Regs(const char *tag);
 static void CameraPipeline_PrintFrameBufferStats(void);
 static void CameraPipeline_DumpFrameBufferOverUart(void);
+#if ((CAMERA_PIPELINE_PIPE0_RAW16_DEBUG != 0U) && (CAMERA_PIPELINE_PIPE0_SW_RGB565_DEBUG != 0U))
+static void CameraPipeline_ConvertPipe0Raw16ToRgb565(void);
+#endif
 static uint32_t CameraPipeline_BufferTailReady(void);
+static uint32_t CameraPipeline_BufferFrameReady(void);
+#if ((CAMERA_PIPELINE_USE_ISP_RUNTIME == 0U) && \
+     (CAMERA_PIPELINE_RAW_GRAY_DEBUG == 0U) && \
+     (CAMERA_PIPELINE_PIPE0_DEBUG == 0U) && \
+     (CAMERA_PIPELINE_PIPE1_ENABLE_WB_EXPOSURE != 0U))
 static void CameraPipeline_ToExposureShiftMultiplier(uint32_t gain, uint8_t *shift, uint8_t *multiplier);
+#endif
 
 HAL_StatusTypeDef CameraPipeline_InitAndStart(I2C_HandleTypeDef *hi2c)
 {
@@ -319,7 +362,7 @@ HAL_StatusTypeDef CameraPipeline_InitAndStart(I2C_HandleTypeDef *hi2c)
          (uint32_t)CAMERA_PIPELINE_OUTPUT_HEIGHT,
          CAMERA_PIPELINE_OUTPUT_FORMAT_NAME,
          (uint32_t)CAMERA_PIPELINE_BUFFER_ADDRESS,
-         (uint32_t)CAMERA_PIPELINE_PITCH_BYTES);
+         (uint32_t)CAMERA_PIPELINE_OUTPUT_PITCH_BYTES);
   printf("%s geometry probe: sensor_info=%lux%lu raw_effective=%lux%lu test_pattern_mode=%lu isp_runtime=%lu\r\n",
          (CAMERA_PIPELINE_USE_ISP_RUNTIME != 0U) ? "ISP" : "DCMIPP",
          (uint32_t)CAMERA_PIPELINE_INPUT_WIDTH,
@@ -335,7 +378,7 @@ HAL_StatusTypeDef CameraPipeline_InitAndStart(I2C_HandleTypeDef *hi2c)
 #if (CAMERA_PIPELINE_USE_LOW_LINK != 0U)
          "BT_450",
 #else
-         "BT_1600",
+         "BT_950",
 #endif
          (uint32_t)CAMERA_PIPELINE_USE_LOW_LINK,
 #if (CAMERA_PIPELINE_USE_LOW_LINK != 0U)
@@ -345,12 +388,18 @@ HAL_StatusTypeDef CameraPipeline_InitAndStart(I2C_HandleTypeDef *hi2c)
 #endif
          );
 #if (CAMERA_PIPELINE_PIPE0_DEBUG != 0U)
-  printf("PIPE0 %s crop: hsize=%lu vsize=%lu line_bytes=%lu pitch=%lu dump_bytes=%lu dcc_done_bytes=%lu limit_words=%lu\r\n",
+  printf("PIPE0 %s capture: crop=%lux%lu raw=%lux%lu raw_line=%lu raw_pitch=%lu raw_bytes=%lu output=%lux%lu output_pitch=%lu dump_bytes=%lu dcc_done_bytes=%lu limit_words=%lu\r\n",
          CAMERA_PIPELINE_OUTPUT_FORMAT_NAME,
          (uint32_t)CAMERA_PIPELINE_PIPE0_CROP_HSIZE,
+         (uint32_t)CAMERA_PIPELINE_PIPE0_CROP_VSIZE,
+         (uint32_t)CAMERA_PIPELINE_PIPE0_RAW_CAPTURE_WIDTH,
+         (uint32_t)CAMERA_PIPELINE_PIPE0_RAW_CAPTURE_HEIGHT,
+         (uint32_t)CAMERA_PIPELINE_PIPE0_RAW_CAPTURE_LINE_BYTES,
+         (uint32_t)CAMERA_PIPELINE_CAPTURE_PITCH_BYTES,
+         (uint32_t)CAMERA_PIPELINE_CAPTURE_FRAME_BYTES,
+         (uint32_t)CAMERA_PIPELINE_OUTPUT_WIDTH,
          (uint32_t)CAMERA_PIPELINE_OUTPUT_HEIGHT,
-         (uint32_t)CAMERA_PIPELINE_OUTPUT_LINE_BYTES,
-         (uint32_t)CAMERA_PIPELINE_PITCH_BYTES,
+         (uint32_t)CAMERA_PIPELINE_OUTPUT_PITCH_BYTES,
          (uint32_t)CAMERA_PIPELINE_FRAME_BYTES,
          (uint32_t)CAMERA_PIPELINE_DCC_DONE_BYTES,
          (uint32_t)CAMERA_PIPELINE_DCC_DONE_WORDS);
@@ -359,7 +408,7 @@ HAL_StatusTypeDef CameraPipeline_InitAndStart(I2C_HandleTypeDef *hi2c)
          (uint32_t)CAMERA_PIPELINE_PIPE0_CROP_HSTART,
          (uint32_t)CAMERA_PIPELINE_PIPE0_CROP_VSTART,
          (uint32_t)CAMERA_PIPELINE_PIPE0_CROP_HSIZE,
-         (uint32_t)CAMERA_PIPELINE_OUTPUT_HEIGHT);
+         (uint32_t)CAMERA_PIPELINE_PIPE0_CROP_VSIZE);
 #endif
 
   if (CameraPipeline_DCMIPP_Init() != HAL_OK)
@@ -556,6 +605,7 @@ void CameraPipeline_Task(void)
   {
     uint32_t elapsed = now - pipeline_freeze_tick;
     uint32_t tail_ready = CameraPipeline_BufferTailReady();
+    uint32_t frame_ready = CameraPipeline_BufferFrameReady();
 
     if (elapsed < CAMERA_PIPELINE_FREEZE_MIN_WAIT_MS)
     {
@@ -563,7 +613,7 @@ void CameraPipeline_Task(void)
     }
 
     if (!((CAMERA_PIPELINE_CAPTURE_PIPE == DCMIPP_PIPE0) && (pipeline_p0_limit_count != 0U)) &&
-        (tail_ready == 0U) &&
+        (frame_ready == 0U) &&
         (elapsed < CAMERA_PIPELINE_FREEZE_TIMEOUT_MS))
     {
       return;
@@ -576,9 +626,9 @@ void CameraPipeline_Task(void)
     pipeline_sensor_streaming = 0U;
     (void)HAL_DCMIPP_CSI_PIPE_Stop(&hdcmipp, CAMERA_PIPELINE_CAPTURE_PIPE, DCMIPP_VIRTUAL_CHANNEL0);
     pipeline_status.state = CAMERA_PIPELINE_STATE_FROZEN;
-    printf("%s pipeline frozen for dump: cb=%lu sof=%lu eof=%lu elapsed=%lu tail_ready=%lu p0limit=%lu p0limit_tick=%lu p0limit_dcc=%lu p0dcc=%lu p0scszr=0x%08lX p0cscszr=0x%08lX p1sr=0x%08lX p1dscr=0x%08lX p1dsrtior=0x%08lX p1dsszr=0x%08lX"
+    printf("%s pipeline frozen for dump: cb=%lu sof=%lu eof=%lu elapsed=%lu tail_ready=%lu frame_ready=%lu p0limit=%lu p0limit_tick=%lu p0limit_dcc=%lu p0dcc=%lu p0scszr=0x%08lX p0cscszr=0x%08lX p1sr=0x%08lX p1dscr=0x%08lX p1dsrtior=0x%08lX p1dsszr=0x%08lX"
 #if (CAMERA_PIPELINE_CSI_LINE_BYTE_PROBE != 0U)
-           " lb1=%lu lb124=%lu lb616=%lu lb1232=%lu"
+           " lb%lu=%lu lb%lu=%lu lb%lu=%lu lb%lu=%lu"
 #endif
            "\r\n",
            CAMERA_PIPELINE_OUTPUT_FORMAT_NAME,
@@ -587,6 +637,7 @@ void CameraPipeline_Task(void)
            (uint32_t)pipeline_eof_count,
            (uint32_t)elapsed,
            (uint32_t)tail_ready,
+           (uint32_t)frame_ready,
            (uint32_t)pipeline_p0_limit_count,
            (uint32_t)pipeline_p0_limit_tick,
            (uint32_t)pipeline_p0_limit_dcc,
@@ -599,9 +650,13 @@ void CameraPipeline_Task(void)
            (uint32_t)DCMIPP->P1DSSZR
 #if (CAMERA_PIPELINE_CSI_LINE_BYTE_PROBE != 0U)
            ,
+           (uint32_t)CAMERA_PIPELINE_CSI_PROBE_LINE0,
            (uint32_t)pipeline_csi_lb_count[0],
+           (uint32_t)CAMERA_PIPELINE_CSI_PROBE_LINE1,
            (uint32_t)pipeline_csi_lb_count[1],
+           (uint32_t)CAMERA_PIPELINE_CSI_PROBE_LINE2,
            (uint32_t)pipeline_csi_lb_count[2],
+           (uint32_t)CAMERA_PIPELINE_CSI_PROBE_LINE3,
            (uint32_t)pipeline_csi_lb_count[3]
 #endif
            );
@@ -635,7 +690,7 @@ void CameraPipeline_Task(void)
     (void)HAL_DCMIPP_PIPE_ReadFrameCounter(&hdcmipp, CAMERA_PIPELINE_CAPTURE_PIPE, &hw_frames);
     printf("camera heartbeat fmt=%s cb=%lu hw=%lu sof=%lu eof=%lu gain=%ld exposure=%ld err=%lu state=%lu p0sr=0x%08lX p0fctcr=0x%08lX p0dcc=%lu p1sr=0x%08lX p1fctcr=0x%08lX csi_sr1=0x%08lX csi_err1=0x%08lX csi_err2=0x%08lX"
 #if (CAMERA_PIPELINE_CSI_LINE_BYTE_PROBE != 0U)
-           " lb1=%lu lb124=%lu lb616=%lu lb1232=%lu"
+           " lb%lu=%lu lb%lu=%lu lb%lu=%lu lb%lu=%lu"
 #endif
            "\r\n",
            CAMERA_PIPELINE_OUTPUT_FORMAT_NAME,
@@ -657,9 +712,13 @@ void CameraPipeline_Task(void)
            (uint32_t)CSI->ERR2
 #if (CAMERA_PIPELINE_CSI_LINE_BYTE_PROBE != 0U)
            ,
+           (uint32_t)CAMERA_PIPELINE_CSI_PROBE_LINE0,
            (uint32_t)pipeline_csi_lb_count[0],
+           (uint32_t)CAMERA_PIPELINE_CSI_PROBE_LINE1,
            (uint32_t)pipeline_csi_lb_count[1],
+           (uint32_t)CAMERA_PIPELINE_CSI_PROBE_LINE2,
            (uint32_t)pipeline_csi_lb_count[2],
+           (uint32_t)CAMERA_PIPELINE_CSI_PROBE_LINE3,
            (uint32_t)pipeline_csi_lb_count[3]
 #endif
            );
@@ -881,10 +940,13 @@ static HAL_StatusTypeDef CameraPipeline_StartCaptureCycle(void)
   pipeline_p0_limit_count = 0U;
   pipeline_p0_limit_tick = 0U;
   pipeline_p0_limit_dcc = 0U;
+#if ((CAMERA_PIPELINE_PIPE0_RAW16_DEBUG != 0U) && (CAMERA_PIPELINE_PIPE0_SW_RGB565_DEBUG != 0U))
+  pipeline_pipe0_sw_rgb_done = 0U;
+#endif
 
-  memset((void *)CAMERA_PIPELINE_BUFFER_ADDRESS, 0xA5, CAMERA_PIPELINE_FRAME_BYTES);
+  memset((void *)CAMERA_PIPELINE_BUFFER_ADDRESS, 0xA5, CAMERA_PIPELINE_CAPTURE_FRAME_BYTES);
   SCB_CleanDCache_by_Addr((void *)CAMERA_PIPELINE_BUFFER_ADDRESS,
-                          (int32_t)CAMERA_PIPELINE_FRAME_BYTES);
+                          (int32_t)CAMERA_PIPELINE_CAPTURE_FRAME_BYTES);
 
   printf("%s capture cycle %lu request: mode=%s warmup_done=%lu sensor_streaming=%lu\r\n",
          CAMERA_PIPELINE_OUTPUT_FORMAT_NAME,
@@ -1016,7 +1078,7 @@ static HAL_StatusTypeDef CameraPipeline_DCMIPP_Init(void)
 #if (CAMERA_PIPELINE_USE_LOW_LINK != 0U)
   csi_conf.PHYBitrate = DCMIPP_CSI_PHY_BT_450;
 #else
-  csi_conf.PHYBitrate = DCMIPP_CSI_PHY_BT_1600;
+  csi_conf.PHYBitrate = DCMIPP_CSI_PHY_BT_950;
 #endif
   if (HAL_DCMIPP_CSI_SetConfig(&hdcmipp, &csi_conf) != HAL_OK)
   {
@@ -1038,7 +1100,7 @@ static HAL_StatusTypeDef CameraPipeline_DCMIPP_Init(void)
   line_byte_conf.VirtualChannel = DCMIPP_VIRTUAL_CHANNEL0;
   line_byte_conf.ByteCounter = CAMERA_PIPELINE_RAW10_LINE_BYTES;
 
-  line_byte_conf.LineCounter = 1U;
+  line_byte_conf.LineCounter = CAMERA_PIPELINE_CSI_PROBE_LINE0;
   if (HAL_DCMIPP_CSI_SetLineByteCounterConfig(&hdcmipp, DCMIPP_CSI_COUNTER0, &line_byte_conf) != HAL_OK)
   {
     pipeline_status.last_error = 120U;
@@ -1050,7 +1112,7 @@ static HAL_StatusTypeDef CameraPipeline_DCMIPP_Init(void)
     return HAL_ERROR;
   }
 
-  line_byte_conf.LineCounter = 124U;
+  line_byte_conf.LineCounter = CAMERA_PIPELINE_CSI_PROBE_LINE1;
   if (HAL_DCMIPP_CSI_SetLineByteCounterConfig(&hdcmipp, DCMIPP_CSI_COUNTER1, &line_byte_conf) != HAL_OK)
   {
     pipeline_status.last_error = 122U;
@@ -1062,7 +1124,7 @@ static HAL_StatusTypeDef CameraPipeline_DCMIPP_Init(void)
     return HAL_ERROR;
   }
 
-  line_byte_conf.LineCounter = 616U;
+  line_byte_conf.LineCounter = CAMERA_PIPELINE_CSI_PROBE_LINE2;
   if (HAL_DCMIPP_CSI_SetLineByteCounterConfig(&hdcmipp, DCMIPP_CSI_COUNTER2, &line_byte_conf) != HAL_OK)
   {
     pipeline_status.last_error = 124U;
@@ -1074,7 +1136,7 @@ static HAL_StatusTypeDef CameraPipeline_DCMIPP_Init(void)
     return HAL_ERROR;
   }
 
-  line_byte_conf.LineCounter = CAMERA_PIPELINE_INPUT_HEIGHT;
+  line_byte_conf.LineCounter = CAMERA_PIPELINE_CSI_PROBE_LINE3;
   if (HAL_DCMIPP_CSI_SetLineByteCounterConfig(&hdcmipp, DCMIPP_CSI_COUNTER3, &line_byte_conf) != HAL_OK)
   {
     pipeline_status.last_error = 126U;
@@ -1085,8 +1147,11 @@ static HAL_StatusTypeDef CameraPipeline_DCMIPP_Init(void)
     pipeline_status.last_error = 127U;
     return HAL_ERROR;
   }
-  printf("CSI line/byte probe armed: byte=%lu lines=1,124,616,%lu\r\n",
+  printf("CSI line/byte probe armed: byte=%lu lines=%lu,%lu,%lu,%lu\r\n",
          (uint32_t)CAMERA_PIPELINE_RAW10_LINE_BYTES,
+         (uint32_t)CAMERA_PIPELINE_CSI_PROBE_LINE0,
+         (uint32_t)CAMERA_PIPELINE_CSI_PROBE_LINE1,
+         (uint32_t)CAMERA_PIPELINE_CSI_PROBE_LINE2,
          (uint32_t)CAMERA_PIPELINE_INPUT_HEIGHT);
 #endif
 
@@ -1117,7 +1182,7 @@ static HAL_StatusTypeDef CameraPipeline_DCMIPP_Init(void)
   pipe_conf.PixelPackerFormat = DCMIPP_PIXEL_PACKER_FORMAT_RGB565_1;
 #endif
 #endif
-  pipe_conf.PixelPipePitch = CAMERA_PIPELINE_PITCH_BYTES;
+  pipe_conf.PixelPipePitch = CAMERA_PIPELINE_PIPE_CONFIG_PITCH_BYTES;
   if (HAL_DCMIPP_PIPE_SetConfig(&hdcmipp, CAMERA_PIPELINE_CAPTURE_PIPE, &pipe_conf) != HAL_OK)
   {
     pipeline_status.last_error = 14U;
@@ -1141,7 +1206,11 @@ static HAL_StatusTypeDef CameraPipeline_DCMIPP_Init(void)
   if (HAL_DCMIPP_PIPE_SetBytesDecimationConfig(&hdcmipp,
                                                CAMERA_PIPELINE_CAPTURE_PIPE,
                                                DCMIPP_OEBS_ODD,
+#if ((CAMERA_PIPELINE_PIPE0_RAW16_DEBUG != 0U) && (CAMERA_PIPELINE_PIPE0_SW_RGB565_DEBUG != 0U))
                                                DCMIPP_BSM_ALL) != HAL_OK)
+#else
+                                               DCMIPP_BSM_ALL) != HAL_OK)
+#endif
   {
     pipeline_status.last_error = 153U;
     return HAL_ERROR;
@@ -1149,18 +1218,30 @@ static HAL_StatusTypeDef CameraPipeline_DCMIPP_Init(void)
   if (HAL_DCMIPP_PIPE_SetLinesDecimationConfig(&hdcmipp,
                                                CAMERA_PIPELINE_CAPTURE_PIPE,
                                                DCMIPP_OELS_ODD,
+#if ((CAMERA_PIPELINE_PIPE0_RAW16_DEBUG != 0U) && (CAMERA_PIPELINE_PIPE0_SW_RGB565_DEBUG != 0U))
+                                               DCMIPP_LSM_ALTERNATE_2) != HAL_OK)
+#else
                                                DCMIPP_LSM_ALL) != HAL_OK)
+#endif
   {
     pipeline_status.last_error = 154U;
     return HAL_ERROR;
   }
-  printf("PIPE0 %s byte/line select forced: ppcr=0x%08lX bytes=ALL lines=ALL\r\n",
+  printf("PIPE0 %s byte/line select forced: ppcr=0x%08lX bytes=%s lines=%s\r\n",
          CAMERA_PIPELINE_OUTPUT_FORMAT_NAME,
-         (uint32_t)DCMIPP->P0PPCR);
+         (uint32_t)DCMIPP->P0PPCR,
+#if ((CAMERA_PIPELINE_PIPE0_RAW16_DEBUG != 0U) && (CAMERA_PIPELINE_PIPE0_SW_RGB565_DEBUG != 0U))
+         "ALL",
+         "ALTERNATE_2"
+#else
+         "ALL",
+         "ALL"
+#endif
+         );
   crop_conf.HStart = CAMERA_PIPELINE_PIPE0_CROP_HSTART;
   crop_conf.VStart = CAMERA_PIPELINE_PIPE0_CROP_VSTART;
   crop_conf.HSize = CAMERA_PIPELINE_PIPE0_CROP_HSIZE;
-  crop_conf.VSize = CAMERA_PIPELINE_OUTPUT_HEIGHT;
+  crop_conf.VSize = CAMERA_PIPELINE_PIPE0_CROP_VSIZE;
   crop_conf.PipeArea = DCMIPP_POSITIVE_AREA;
   if (HAL_DCMIPP_PIPE_SetCropConfig(&hdcmipp, CAMERA_PIPELINE_CAPTURE_PIPE, &crop_conf) != HAL_OK)
   {
@@ -1202,7 +1283,11 @@ static HAL_StatusTypeDef CameraPipeline_DCMIPP_Init(void)
     pipeline_status.last_error = 150U;
     return HAL_ERROR;
   }
-  printf("DCMIPP PIPE1 normal decimation forced: raw 1640x1232 -> 820x616 before downsize\r\n");
+  printf("DCMIPP PIPE1 normal decimation forced: raw %lux%lu -> %lux%lu before downsize\r\n",
+         (uint32_t)CAMERA_PIPELINE_INPUT_WIDTH,
+         (uint32_t)CAMERA_PIPELINE_INPUT_HEIGHT,
+         (uint32_t)(CAMERA_PIPELINE_INPUT_WIDTH / 2U),
+         (uint32_t)(CAMERA_PIPELINE_INPUT_HEIGHT / 2U));
 #endif
 
 #if (CAMERA_PIPELINE_USE_ISP_RUNTIME == 0U)
@@ -1255,7 +1340,7 @@ static HAL_StatusTypeDef CameraPipeline_DCMIPP_Init(void)
   printf("DCMIPP PIPE1 gray crop only: crop=%lux%lu downsize=off decimation=off pitch=%lu frame_bytes=%lu\r\n",
          (uint32_t)CAMERA_PIPELINE_OUTPUT_WIDTH,
          (uint32_t)CAMERA_PIPELINE_OUTPUT_HEIGHT,
-         (uint32_t)CAMERA_PIPELINE_PITCH_BYTES,
+         (uint32_t)CAMERA_PIPELINE_OUTPUT_PITCH_BYTES,
          (uint32_t)CAMERA_PIPELINE_FRAME_BYTES);
 #endif
 
@@ -1263,13 +1348,13 @@ static HAL_StatusTypeDef CameraPipeline_DCMIPP_Init(void)
   printf("DCMIPP PIPE1 rawbayer2rgb only: expected=%lux%lu pitch=%lu frame_bytes=%lu\r\n",
          (uint32_t)CAMERA_PIPELINE_OUTPUT_WIDTH,
          (uint32_t)CAMERA_PIPELINE_OUTPUT_HEIGHT,
-         (uint32_t)CAMERA_PIPELINE_PITCH_BYTES,
+         (uint32_t)CAMERA_PIPELINE_OUTPUT_PITCH_BYTES,
          (uint32_t)CAMERA_PIPELINE_FRAME_BYTES);
 #elif (CAMERA_PIPELINE_PIPE1_GRAY_DECIM_ONLY_DEBUG != 0U)
   printf("DCMIPP PIPE1 gray decimation only: expected=%lux%lu pitch=%lu frame_bytes=%lu downsize=off\r\n",
          (uint32_t)CAMERA_PIPELINE_OUTPUT_WIDTH,
          (uint32_t)CAMERA_PIPELINE_OUTPUT_HEIGHT,
-         (uint32_t)CAMERA_PIPELINE_PITCH_BYTES,
+         (uint32_t)CAMERA_PIPELINE_OUTPUT_PITCH_BYTES,
          (uint32_t)CAMERA_PIPELINE_FRAME_BYTES);
 #elif (CAMERA_PIPELINE_PIPE1_GRAY_CROP_ONLY_DEBUG != 0U)
   printf("DCMIPP PIPE1 gray crop only output: expected=%lux%lu\r\n",
@@ -1805,7 +1890,11 @@ static void CameraPipeline_DumpFrameBufferOverUart(void)
   uint32_t checksum = 0U;
 
   SCB_InvalidateDCache_by_Addr((void *)CAMERA_PIPELINE_BUFFER_ADDRESS,
-                               (int32_t)CAMERA_PIPELINE_FRAME_BYTES);
+                               (int32_t)CAMERA_PIPELINE_CAPTURE_FRAME_BYTES);
+
+#if ((CAMERA_PIPELINE_PIPE0_RAW16_DEBUG != 0U) && (CAMERA_PIPELINE_PIPE0_SW_RGB565_DEBUG != 0U))
+  CameraPipeline_ConvertPipe0Raw16ToRgb565();
+#endif
 
   CameraPipeline_PrintFrameBufferStats();
 
@@ -1813,7 +1902,7 @@ static void CameraPipeline_DumpFrameBufferOverUart(void)
          CAMERA_PIPELINE_UART_BEGIN_TAG,
          (uint32_t)CAMERA_PIPELINE_OUTPUT_WIDTH,
          (uint32_t)CAMERA_PIPELINE_OUTPUT_HEIGHT,
-         (uint32_t)CAMERA_PIPELINE_PITCH_BYTES,
+         (uint32_t)CAMERA_PIPELINE_OUTPUT_PITCH_BYTES,
          (uint32_t)CAMERA_PIPELINE_FRAME_BYTES,
          (uint32_t)CAMERA_PIPELINE_BUFFER_ADDRESS);
 
@@ -1856,7 +1945,7 @@ static void CameraPipeline_PrintFrameBufferStats(void)
   for (uint32_t row = 0U; row < CAMERA_PIPELINE_OUTPUT_HEIGHT; row++)
   {
     uint32_t row_has_data = 0U;
-    uint32_t row_offset = row * CAMERA_PIPELINE_PITCH_BYTES;
+    uint32_t row_offset = row * CAMERA_PIPELINE_OUTPUT_PITCH_BYTES;
 
     for (uint32_t col = 0U; col < CAMERA_PIPELINE_OUTPUT_LINE_BYTES; col++)
     {
@@ -1898,26 +1987,180 @@ static void CameraPipeline_PrintFrameBufferStats(void)
          (uint32_t)last_non_a5_offset);
 }
 
+#if ((CAMERA_PIPELINE_PIPE0_RAW16_DEBUG != 0U) && (CAMERA_PIPELINE_PIPE0_SW_RGB565_DEBUG != 0U))
+static void CameraPipeline_ConvertPipe0Raw16ToRgb565(void)
+{
+  volatile uint8_t *buffer = (volatile uint8_t *)CAMERA_PIPELINE_BUFFER_ADDRESS;
+  static uint32_t raw_hist[1024];
+  uint32_t min_raw = 0xFFFFFFFFU;
+  uint32_t max_raw = 0U;
+  uint32_t black = 0U;
+  uint32_t white = 1023U;
+  uint32_t total_pixels = ((CAMERA_PIPELINE_OUTPUT_WIDTH + 1U) / 2U) *
+                          ((CAMERA_PIPELINE_OUTPUT_HEIGHT + 1U) / 2U);
+  uint32_t black_rank = (total_pixels * CAMERA_PIPELINE_PIPE0_SW_RGB_BLACK_PERCENTILE) / 100U;
+  uint32_t white_rank = (total_pixels * CAMERA_PIPELINE_PIPE0_SW_RGB_WHITE_PERCENTILE) / 100U;
+  uint32_t cumulative = 0U;
+  uint32_t black_found = 0U;
+  uint32_t range;
+
+  if (pipeline_pipe0_sw_rgb_done != 0U)
+  {
+    return;
+  }
+
+  memset(raw_hist, 0, sizeof(raw_hist));
+
+  for (uint32_t y = 0U; y < CAMERA_PIPELINE_OUTPUT_HEIGHT; y += 2U)
+  {
+    uint32_t src_row = y * CAMERA_PIPELINE_CAPTURE_PITCH_BYTES;
+    uint32_t y_next = ((y + 1U) < CAMERA_PIPELINE_OUTPUT_HEIGHT) ? (y + 1U) : y;
+    uint32_t src_row_next = y_next * CAMERA_PIPELINE_CAPTURE_PITCH_BYTES;
+
+    for (uint32_t x = 0U; x < CAMERA_PIPELINE_OUTPUT_WIDTH; x += 2U)
+    {
+      uint32_t x_next = ((x + 1U) < CAMERA_PIPELINE_OUTPUT_WIDTH) ? (x + 1U) : x;
+      uint32_t src00 = src_row + (x * 2U);
+      uint32_t src01 = src_row + (x_next * 2U);
+      uint32_t src10 = src_row_next + (x * 2U);
+      uint32_t src11 = src_row_next + (x_next * 2U);
+      uint32_t raw00 = ((uint32_t)buffer[src00] | ((uint32_t)buffer[src00 + 1U] << 8)) & 0x03FFU;
+      uint32_t raw01 = ((uint32_t)buffer[src01] | ((uint32_t)buffer[src01 + 1U] << 8)) & 0x03FFU;
+      uint32_t raw10 = ((uint32_t)buffer[src10] | ((uint32_t)buffer[src10 + 1U] << 8)) & 0x03FFU;
+      uint32_t raw11 = ((uint32_t)buffer[src11] | ((uint32_t)buffer[src11 + 1U] << 8)) & 0x03FFU;
+      uint32_t raw = (raw00 + raw01 + raw10 + raw11 + 2U) / 4U;
+
+      if (raw < min_raw)
+      {
+        min_raw = raw;
+      }
+      if (raw > max_raw)
+      {
+        max_raw = raw;
+      }
+      raw_hist[raw]++;
+    }
+  }
+
+  for (uint32_t i = 0U; i < 1024U; i++)
+  {
+    cumulative += raw_hist[i];
+    if ((black_found == 0U) && (cumulative >= black_rank))
+    {
+      black = i;
+      black_found = 1U;
+    }
+    if (cumulative >= white_rank)
+    {
+      white = i;
+      break;
+    }
+  }
+
+  if (white <= black)
+  {
+    black = min_raw;
+    white = max_raw;
+  }
+  if (white <= black)
+  {
+    white = black + 1U;
+  }
+  if ((max_raw - min_raw) < 4U)
+  {
+    printf("PIPE0 software RGB565 warning: flat raw frame min=%lu max=%lu, check PIPE0 crop/input\r\n",
+           (uint32_t)min_raw,
+           (uint32_t)max_raw);
+  }
+  range = white - black;
+
+  for (uint32_t y = 0U; y < CAMERA_PIPELINE_OUTPUT_HEIGHT; y += 2U)
+  {
+    uint32_t src_row = y * CAMERA_PIPELINE_CAPTURE_PITCH_BYTES;
+    uint32_t y_next = ((y + 1U) < CAMERA_PIPELINE_OUTPUT_HEIGHT) ? (y + 1U) : y;
+    uint32_t src_row_next = y_next * CAMERA_PIPELINE_CAPTURE_PITCH_BYTES;
+    uint32_t dst_row = y * CAMERA_PIPELINE_OUTPUT_PITCH_BYTES;
+    uint32_t dst_row_next = y_next * CAMERA_PIPELINE_OUTPUT_PITCH_BYTES;
+
+    for (uint32_t x = 0U; x < CAMERA_PIPELINE_OUTPUT_WIDTH; x += 2U)
+    {
+      uint32_t x_next = ((x + 1U) < CAMERA_PIPELINE_OUTPUT_WIDTH) ? (x + 1U) : x;
+      uint32_t src00 = src_row + (x * 2U);
+      uint32_t src01 = src_row + (x_next * 2U);
+      uint32_t src10 = src_row_next + (x * 2U);
+      uint32_t src11 = src_row_next + (x_next * 2U);
+      uint32_t dst00 = dst_row + (x * 2U);
+      uint32_t dst01 = dst_row + (x_next * 2U);
+      uint32_t dst10 = dst_row_next + (x * 2U);
+      uint32_t dst11 = dst_row_next + (x_next * 2U);
+      uint32_t raw00 = ((uint32_t)buffer[src00] | ((uint32_t)buffer[src00 + 1U] << 8)) & 0x03FFU;
+      uint32_t raw01 = ((uint32_t)buffer[src01] | ((uint32_t)buffer[src01 + 1U] << 8)) & 0x03FFU;
+      uint32_t raw10 = ((uint32_t)buffer[src10] | ((uint32_t)buffer[src10 + 1U] << 8)) & 0x03FFU;
+      uint32_t raw11 = ((uint32_t)buffer[src11] | ((uint32_t)buffer[src11 + 1U] << 8)) & 0x03FFU;
+      uint32_t raw = (raw00 + raw01 + raw10 + raw11 + 2U) / 4U;
+      uint32_t luma;
+      uint32_t rgb565;
+
+      if (raw <= black)
+      {
+        luma = 0U;
+      }
+      else if (raw >= white)
+      {
+        luma = 255U;
+      }
+      else
+      {
+        luma = ((raw - black) * 255U) / range;
+      }
+
+      rgb565 = ((luma & 0xF8U) << 8) | ((luma & 0xFCU) << 3) | (luma >> 3);
+      buffer[dst00] = (uint8_t)(rgb565 & 0xFFU);
+      buffer[dst00 + 1U] = (uint8_t)(rgb565 >> 8);
+      buffer[dst01] = (uint8_t)(rgb565 & 0xFFU);
+      buffer[dst01 + 1U] = (uint8_t)(rgb565 >> 8);
+      buffer[dst10] = (uint8_t)(rgb565 & 0xFFU);
+      buffer[dst10 + 1U] = (uint8_t)(rgb565 >> 8);
+      buffer[dst11] = (uint8_t)(rgb565 & 0xFFU);
+      buffer[dst11 + 1U] = (uint8_t)(rgb565 >> 8);
+    }
+  }
+
+  pipeline_pipe0_sw_rgb_done = 1U;
+  printf("PIPE0 software RGB565: raw%lux%lu -> bayer2x2 luma %lux%lu raw10 min=%lu max=%lu black_p%lu=%lu white_p%lu=%lu\r\n",
+         (uint32_t)CAMERA_PIPELINE_PIPE0_RAW_CAPTURE_WIDTH,
+         (uint32_t)CAMERA_PIPELINE_PIPE0_RAW_CAPTURE_HEIGHT,
+         (uint32_t)CAMERA_PIPELINE_OUTPUT_WIDTH,
+         (uint32_t)CAMERA_PIPELINE_OUTPUT_HEIGHT,
+         (uint32_t)min_raw,
+         (uint32_t)max_raw,
+         (uint32_t)CAMERA_PIPELINE_PIPE0_SW_RGB_BLACK_PERCENTILE,
+         (uint32_t)black,
+         (uint32_t)CAMERA_PIPELINE_PIPE0_SW_RGB_WHITE_PERCENTILE,
+         (uint32_t)white);
+}
+#endif
+
 static uint32_t CameraPipeline_BufferTailReady(void)
 {
   volatile const uint8_t *buffer = (volatile const uint8_t *)CAMERA_PIPELINE_BUFFER_ADDRESS;
-  uint32_t tail_bytes = CAMERA_PIPELINE_TAIL_READY_LINES * CAMERA_PIPELINE_PITCH_BYTES;
+  uint32_t tail_bytes = CAMERA_PIPELINE_TAIL_READY_LINES * CAMERA_PIPELINE_CAPTURE_PITCH_BYTES;
   uint32_t start;
   uint32_t samples = 0U;
   uint32_t prefill = 0U;
 
-  if (tail_bytes > CAMERA_PIPELINE_FRAME_BYTES)
+  if (tail_bytes > CAMERA_PIPELINE_CAPTURE_FRAME_BYTES)
   {
-    tail_bytes = CAMERA_PIPELINE_FRAME_BYTES;
+    tail_bytes = CAMERA_PIPELINE_CAPTURE_FRAME_BYTES;
   }
 
-  start = CAMERA_PIPELINE_FRAME_BYTES - tail_bytes;
+  start = CAMERA_PIPELINE_CAPTURE_FRAME_BYTES - tail_bytes;
   start &= ~3UL;
 
   SCB_InvalidateDCache_by_Addr((void *)CAMERA_PIPELINE_BUFFER_ADDRESS,
-                               (int32_t)CAMERA_PIPELINE_FRAME_BYTES);
+                               (int32_t)CAMERA_PIPELINE_CAPTURE_FRAME_BYTES);
 
-  for (uint32_t i = start; (i + 3U) < CAMERA_PIPELINE_FRAME_BYTES; i += 4U)
+  for (uint32_t i = start; (i + 3U) < CAMERA_PIPELINE_CAPTURE_FRAME_BYTES; i += 4U)
   {
     uint32_t word = ((uint32_t)buffer[i]) |
                     ((uint32_t)buffer[i + 1U] << 8) |
@@ -1933,6 +2176,35 @@ static uint32_t CameraPipeline_BufferTailReady(void)
   return ((samples != 0U) && (prefill < (samples / 2U))) ? 1U : 0U;
 }
 
+static uint32_t CameraPipeline_BufferFrameReady(void)
+{
+  volatile const uint8_t *buffer = (volatile const uint8_t *)CAMERA_PIPELINE_BUFFER_ADDRESS;
+  uint32_t samples = 0U;
+  uint32_t prefill = 0U;
+
+  SCB_InvalidateDCache_by_Addr((void *)CAMERA_PIPELINE_BUFFER_ADDRESS,
+                               (int32_t)CAMERA_PIPELINE_CAPTURE_FRAME_BYTES);
+
+  for (uint32_t i = 0U; (i + 3U) < CAMERA_PIPELINE_CAPTURE_FRAME_BYTES; i += 4U)
+  {
+    uint32_t word = ((uint32_t)buffer[i]) |
+                    ((uint32_t)buffer[i + 1U] << 8) |
+                    ((uint32_t)buffer[i + 2U] << 16) |
+                    ((uint32_t)buffer[i + 3U] << 24);
+    samples++;
+    if (word == 0xA5A5A5A5UL)
+    {
+      prefill++;
+    }
+  }
+
+  return ((samples != 0U) && (prefill < (samples / 10U))) ? 1U : 0U;
+}
+
+#if ((CAMERA_PIPELINE_USE_ISP_RUNTIME == 0U) && \
+     (CAMERA_PIPELINE_RAW_GRAY_DEBUG == 0U) && \
+     (CAMERA_PIPELINE_PIPE0_DEBUG == 0U) && \
+     (CAMERA_PIPELINE_PIPE1_ENABLE_WB_EXPOSURE != 0U))
 static void CameraPipeline_ToExposureShiftMultiplier(uint32_t gain, uint8_t *shift, uint8_t *multiplier)
 {
   uint64_t val = gain;
@@ -1952,6 +2224,7 @@ static void CameraPipeline_ToExposureShiftMultiplier(uint32_t gain, uint8_t *shi
 
   *multiplier = (uint8_t)val;
 }
+#endif
 
 void HAL_DCMIPP_PIPE_FrameEventCallback(DCMIPP_HandleTypeDef *hdcmipp_cb, uint32_t Pipe)
 {
