@@ -61,16 +61,19 @@ typedef struct
   uint16_t Height;
   uint16_t FrameLength;
   uint16_t LineLength;
-  uint8_t Binning;
+  uint8_t WindowScale;
+  uint8_t OddInc;
+  uint8_t BinningMode;
 } IMX219_Mode_t;
 
 static const IMX219_Mode_t IMX219_Modes[] =
 {
-  { IMX219_R3280_2464, 3280U, 2464U, 3526U, 3448U, 1U },
-  { IMX219_R1920_1080, 1920U, 1080U, 1763U, 3448U, 1U },
-  { IMX219_R1640_1232, 1640U, 1232U, 1707U, 3560U, 2U },
-  { IMX219_R640_480,    640U,  480U, 1707U, 3560U, 1U },
-  { IMX219_R320_240,    320U,  240U, 1707U, 3560U, 2U },
+  { IMX219_R3280_2464,    3280U, 2464U, 3526U, 3448U, 1U, 0x01U, 0x00U },
+  { IMX219_R1920_1080,    1920U, 1080U, 1763U, 3448U, 1U, 0x01U, 0x00U },
+  { IMX219_R1640_1232,    1640U, 1232U, 1707U, 3560U, 2U, 0x03U, 0x03U },
+  { IMX219_R640_480,       640U,  480U, 1707U, 3560U, 1U, 0x01U, 0x00U },
+  { IMX219_R320_240,       320U,  240U, 1707U, 3560U, 2U, 0x03U, 0x03U },
+  { IMX219_R640_480_BIN4,  640U,  480U, 1067U, 3560U, 4U, 0x01U, 0x02U },
 };
 
 static const IMX219_Reg_t IMX219_CommonRegs[] =
@@ -170,7 +173,7 @@ int32_t IMX219_EnterLp11(IMX219_Object_t *pObj)
 int32_t IMX219_Init(IMX219_Object_t *pObj, uint32_t Resolution, uint32_t PixelFormat)
 {
   const IMX219_Mode_t *mode;
-  uint32_t binning;
+  uint32_t window_scale;
   uint32_t crop_width;
   uint32_t crop_height;
   uint32_t x_start;
@@ -199,9 +202,9 @@ int32_t IMX219_Init(IMX219_Object_t *pObj, uint32_t Resolution, uint32_t PixelFo
     return IMX219_ERROR;
   }
 
-  binning = mode->Binning;
-  crop_width = (uint32_t)mode->Width * binning;
-  crop_height = (uint32_t)mode->Height * binning;
+  window_scale = mode->WindowScale;
+  crop_width = (uint32_t)mode->Width * window_scale;
+  crop_height = (uint32_t)mode->Height * window_scale;
   x_start = (IMX219_NATIVE_WIDTH - crop_width) / 2U;
   y_start = (IMX219_NATIVE_HEIGHT - crop_height) / 2U;
 
@@ -217,10 +220,10 @@ int32_t IMX219_Init(IMX219_Object_t *pObj, uint32_t Resolution, uint32_t PixelFo
       (IMX219_WriteReg16(pObj, IMX219_REG_Y_ADD_END, (uint16_t)(y_start + crop_height - 1U)) != IMX219_OK) ||
       (IMX219_WriteReg16(pObj, IMX219_REG_X_OUTPUT_SIZE, mode->Width) != IMX219_OK) ||
       (IMX219_WriteReg16(pObj, IMX219_REG_Y_OUTPUT_SIZE, mode->Height) != IMX219_OK) ||
-      (IMX219_WriteReg8(pObj, IMX219_REG_X_ODD_INC, (binning == 2U) ? 0x03U : 0x01U) != IMX219_OK) ||
-      (IMX219_WriteReg8(pObj, IMX219_REG_Y_ODD_INC, (binning == 2U) ? 0x03U : 0x01U) != IMX219_OK) ||
-      (IMX219_WriteReg8(pObj, IMX219_REG_BINNING_MODE_H, (binning == 2U) ? 0x03U : 0x00U) != IMX219_OK) ||
-      (IMX219_WriteReg8(pObj, IMX219_REG_BINNING_MODE_V, (binning == 2U) ? 0x03U : 0x00U) != IMX219_OK) ||
+      (IMX219_WriteReg8(pObj, IMX219_REG_X_ODD_INC, mode->OddInc) != IMX219_OK) ||
+      (IMX219_WriteReg8(pObj, IMX219_REG_Y_ODD_INC, mode->OddInc) != IMX219_OK) ||
+      (IMX219_WriteReg8(pObj, IMX219_REG_BINNING_MODE_H, mode->BinningMode) != IMX219_OK) ||
+      (IMX219_WriteReg8(pObj, IMX219_REG_BINNING_MODE_V, mode->BinningMode) != IMX219_OK) ||
       (IMX219_WriteReg8(pObj, IMX219_REG_CSI_DATA_FORMAT_A, 0x0aU) != IMX219_OK) ||
       (IMX219_WriteReg8(pObj, IMX219_REG_CSI_DATA_FORMAT_B, 0x0aU) != IMX219_OK) ||
       (IMX219_WriteReg8(pObj, IMX219_REG_CSI_LANE_MODE, IMX219_CSI_2_LANE_MODE) != IMX219_OK) ||
